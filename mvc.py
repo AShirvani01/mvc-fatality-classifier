@@ -20,3 +20,9 @@ def get_data():
 
 
 df = pd.read_csv(get_data())
+
+# EDA
+df.head(10)
+df.info()
+df.isnull().sum()
+df.duplicated().sum()
