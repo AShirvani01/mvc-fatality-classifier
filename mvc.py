@@ -26,3 +26,10 @@ df.head(10)
 df.info()
 df.isnull().sum()
 df.duplicated().sum()
+
+# DATA PREPROCESSING
+
+# Response
+df['ACCLASS'].value_counts()
+# df.query('ACCLASS == ["Property Damage O", "None"]')
+df = df.query('ACCLASS != ["Property Damage O", "None"]')
