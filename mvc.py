@@ -26,6 +26,9 @@ df.head(10)
 df.info()
 df.isnull().sum()
 df.duplicated().sum()
+road_class_count = df['ROAD_CLASS'].value_counts()
+hood_count = df['NEIGHBOURHOOD_158'].value_counts()
+missing_neighborhoods = df.query('NEIGHBOURHOOD_158 == "NSA"')
 
 # DATA PREPROCESSING
 
