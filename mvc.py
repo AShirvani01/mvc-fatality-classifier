@@ -1,6 +1,7 @@
 import requests
 from io import StringIO
 import pandas as pd
+import geopandas as gpd
 
 
 def get_data():
@@ -26,16 +27,19 @@ df.head(10)
 df.info()
 df.isnull().sum()
 df.duplicated().sum()
+
+accident_class_count = df['ACCLASS'].value_counts()
 road_class_count = df['ROAD_CLASS'].value_counts()
 hood_count = df['NEIGHBOURHOOD_158'].value_counts()
-missing_neighborhoods = df.query('NEIGHBOURHOOD_158 == "NSA"')
+missing_hoods = df.query('NEIGHBOURHOOD_158 == "NSA"')
+
 
 # DATA PREPROCESSING
 
 # Response
-df['ACCLASS'].value_counts()
+
 # df.query('ACCLASS == ["Property Damage O", "None"]')
-df = df.query('ACCLASS != ["Property Damage O", "None"]')
+df = df.query('ACCLASS != ["Property Damage O", "None"]')  # Remove rare classes
 
 
 # Features
@@ -69,3 +73,9 @@ def encode_datetime(df):
     df['HOUR'] = df['DATETIME'].dt.hour
 
     return df
+
+from pathlib import Path
+# Encoding Geo Data & Filling in missing neighbourhoods
+script_dir = Path(__file__).with_name('toneighshape/Neighbourhoods_v2_region.shp')
+shapefile = gpd.read_file('toneighshape/Neighbourhoods_v2_region.shp')
+shapefile = shapefile.to_crs(epsg=4326)
