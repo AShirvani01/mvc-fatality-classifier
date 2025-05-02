@@ -1,7 +1,12 @@
+# To import dataset
 import requests
 from io import StringIO
 import pandas as pd
+
+# For geodata
 import geopandas as gpd
+from shapely.geometry import shape
+import json
 
 
 def get_data():
@@ -74,8 +79,30 @@ def encode_datetime(df):
 
     return df
 
-from pathlib import Path
+
 # Encoding Geo Data & Filling in missing neighbourhoods
-script_dir = Path(__file__).with_name('toneighshape/Neighbourhoods_v2_region.shp')
-shapefile = gpd.read_file('toneighshape/Neighbourhoods_v2_region.shp')
-shapefile = shapefile.to_crs(epsg=4326)
+
+shapefile = (
+            gpd.read_file('toneighshape/Neighbourhoods_v2_region.shp')
+            .to_crs(epsg=4326)  # Set coordinate system
+    )
+shapefile.plot()
+
+df['geometry'] = (
+                df['geometry']
+                .apply(lambda x: shape(json.loads(x)).wkt)
+                .pipe(gpd.GeoSeries.from_wkt)
+    )
+
+gdf = (
+       gpd.GeoDataFrame(df, crs="EPSG:4326", geometry="geometry")
+       .sjoin(shapefile, how="left")
+    )
+
+# Filling in neighbourhood missing in shapefile
+temp = gdf.query('NEIGHBOURHOOD_158 == "NSA" & NAME.isna()')
+gdf['NAME'] = gdf['NAME'].apply(lambda x: 'Morningside Heights' if x != x else x)
+gdf['ID'] = gdf['ID'].apply(lambda x: 144 if x != x else x)
+
+cond = (gdf['NEIGHBOURHOOD_158'] == "NSA") & (gdf['NAME'].isna())
+gdf.loc[cond, ['HOOD_158', 'NEIGHBOURHOOD_158']] = gdf.loc[cond, ['ID', 'NAME']]
