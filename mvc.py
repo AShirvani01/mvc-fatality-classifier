@@ -106,3 +106,31 @@ gdf['ID'] = gdf['ID'].apply(lambda x: 144 if x != x else x)
 
 cond = (gdf['NEIGHBOURHOOD_158'] == "NSA") & (gdf['NAME'].isna())
 gdf.loc[cond, ['HOOD_158', 'NEIGHBOURHOOD_158']] = gdf.loc[cond, ['ID', 'NAME']]
+
+
+
+health_services = gpd.read_file('Ministry_of_Health_service_provider_locations.geojson')
+health_services_type_count = health_services['SERVICE_TY'].value_counts()
+
+municipalities = [
+                'Scarborough',
+                'Toronto',
+                'North York',
+                'Etobicoke',
+                'East York',
+                'Mississauga',
+                'Brampton',
+                'Markham',
+                'Thornhill',
+                'Vaughan'
+    ]
+
+hospital_types = [
+                "Hospital - Site",
+                "Hospital - Corporation"
+    ]
+
+toronto_hospitals = health_services[
+                    (health_services['SERVICE_TY'].isin(hospital_types))
+                    & (health_services['COMMUNITY'].isin(municipalities))
+    ]
