@@ -1,12 +1,16 @@
+# General libraries
+import pandas as pd
+import numpy as np
+
 # To import dataset
 import requests
 from io import StringIO
-import pandas as pd
 
 # For geodata
 import geopandas as gpd
 from shapely.geometry import shape
 import json
+from scipy.spatial import cKDTree
 
 
 def get_data():
@@ -80,6 +84,8 @@ def encode_datetime(df):
     return df
 
 
+df = encode_datetime(df)
+
 # Encoding Geo Data & Filling in missing neighbourhoods
 
 shapefile = (
@@ -108,10 +114,11 @@ cond = (gdf['NEIGHBOURHOOD_158'] == "NSA") & (gdf['NAME'].isna())
 gdf.loc[cond, ['HOOD_158', 'NEIGHBOURHOOD_158']] = gdf.loc[cond, ['ID', 'NAME']]
 
 
-
+# Adding nearest hospital feature
 health_services = gpd.read_file('Ministry_of_Health_service_provider_locations.geojson')
 health_services_type_count = health_services['SERVICE_TY'].value_counts()
 
+# Filter for Toronto hospitals
 municipalities = [
                 'Scarborough',
                 'Toronto',
@@ -134,3 +141,61 @@ toronto_hospitals = health_services[
                     (health_services['SERVICE_TY'].isin(hospital_types))
                     & (health_services['COMMUNITY'].isin(municipalities))
     ]
+
+hospital_list = [
+                    'Humber River Hospital - Wilson',
+                    'MacKenzie Health - Cortellucci Vaughan Hospital',
+                    'Oak Valley Health - Markham',
+                    'North York General Hospital - General Site',
+                    'Scarborough Health Network - Birchmount',
+                    'Scarborough Health Network - Scarborough General',
+                    'Scarborough Health Network - Centenary',
+                    'Sinai Health System - Mount Sinai',
+                    'Sunnybrook Health Sciences Centre - Bayview Campus',
+                    'Toronto East Health Network - Michael Garron Hospital',
+                    'Trillium Health Partners- Mississauga',
+                    'Trillium Health Partners - Credit Valley',
+                    "Unity Health Toronto - St. Joseph's",
+                    "Unity Health Toronto - St. Michael's",
+                    'University Health Network - Toronto General',
+                    'University Health Network - Toronto Western',
+                    'William Osler Health System - Etobicoke',
+                    'William Osler Health System - Civic'
+    ]
+
+toronto_hospitals_with_er = health_services[
+                        health_services['ENGLISH_NA'].isin(hospital_list)
+    ]
+
+
+def dist_to_nearest_hospital(gdf_A, gdf_B):
+    """Finds distance to nearest hospital from location of collisions.
+
+    Args:
+        gdf_A: GeoDataFrame of the collisions.
+        gdf_B: GeoDataFrame of the hospitals.
+
+    Returns:
+        The input GeoDataFrame with added DIST_TO_HOS feature.
+    """
+    nA = np.array(list(gdf_A['geometry'].apply(lambda x: (x.x, x.y))))
+    nB = np.array(list(gdf_B['geometry'].apply(lambda x: (x.x, x.y))))
+    btree = cKDTree(nB)
+    dist, idx = btree.query(nA, k=1, p=1)  # Manhattan distance
+    gdf_B_nearest = (
+                    gdf_B.iloc[idx]
+                    .drop(columns='geometry')
+                    .reset_index(drop=True)
+        )
+    gdf = pd.concat(
+        [
+            gdf_A.reset_index(drop=True),
+            gdf_B_nearest['ENGLISH_NA'],
+            pd.Series(dist, name='DIST_TO_HOS')
+        ],
+        axis=1)
+
+    return gdf
+
+
+df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
