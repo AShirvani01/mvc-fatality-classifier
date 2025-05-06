@@ -6,6 +6,9 @@ import numpy as np
 import requests
 from io import StringIO
 
+# For visuals
+import matplotlib.pyplot as plt
+
 # For geodata
 import geopandas as gpd
 from shapely.geometry import shape
@@ -42,6 +45,8 @@ road_class_count = df['ROAD_CLASS'].value_counts()
 hood_count = df['NEIGHBOURHOOD_158'].value_counts()
 missing_hoods = df.query('NEIGHBOURHOOD_158 == "NSA"')
 
+# plt.hist(df.query('ROAD_CLASS == "Major Arterial"')['HOUR'])
+# plt.show()
 
 # DATA PREPROCESSING
 
@@ -176,7 +181,7 @@ def dist_to_nearest_hospital(gdf_A, gdf_B):
         gdf_B: GeoDataFrame of the hospitals.
 
     Returns:
-        The input GeoDataFrame with added DIST_TO_HOS feature.
+        The input GeoDataFrame A with added DIST_TO_HOS feature.
     """
     nA = np.array(list(gdf_A['geometry'].apply(lambda x: (x.x, x.y))))
     nB = np.array(list(gdf_B['geometry'].apply(lambda x: (x.x, x.y))))
@@ -187,15 +192,35 @@ def dist_to_nearest_hospital(gdf_A, gdf_B):
                     .drop(columns='geometry')
                     .reset_index(drop=True)
         )
-    gdf = pd.concat(
-        [
-            gdf_A.reset_index(drop=True),
-            gdf_B_nearest['ENGLISH_NA'],
-            pd.Series(dist, name='DIST_TO_HOS')
-        ],
-        axis=1)
+    gdf = pd.concat([gdf_A.reset_index(drop=True),
+                     gdf_B_nearest['ENGLISH_NA'],
+                     pd.Series(dist, name='DIST_TO_HOS')],
+                    axis=1)
 
     return gdf
 
 
 df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
+# df = df.drop(columns=['_id',
+#                       'ACCNUM',
+#                       'DATE',
+#                       'TIME',
+#                       'DATETIME',
+#                       'DISTRICT',
+#                       'NEIGHBOURHOOD_158',
+#                       'HOOD_140',
+#                       'NEIGHBOURHOOD_140',
+#                       'DIVISION',
+#                       'geometry',
+#                       'STREET1',
+#                       'STREET2',
+#                       'OFFSET',
+#                       'INJURY',
+#                       'FATAL_NO',
+#                       'index_right',
+#                       'ID',
+#                       'NAME',
+#                       'ENGLISH_NA'], axis=1)
+
+# Filling in missing Road classes
+missing_road_class = df.query('ROAD_CLASS == "None"')
