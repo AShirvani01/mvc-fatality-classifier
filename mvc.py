@@ -222,5 +222,5 @@ df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
 #                       'NAME',
 #                       'ENGLISH_NA'], axis=1)
 
-# Filling in missing Road classes
+# Filling in missing Road Classes
 missing_road_class = df.query('ROAD_CLASS == "None"')
