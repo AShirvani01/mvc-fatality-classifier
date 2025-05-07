@@ -222,5 +222,50 @@ df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
 #                       'NAME',
 #                       'ENGLISH_NA'], axis=1)
 
+df = df.drop(columns='index_right', axis=1)
+
 # Filling in missing Road Classes
 missing_road_class = df.query('ROAD_CLASS == "None"')
+
+
+streets = (
+            gpd.read_file('lrnf000r21a_e/lrnf000r21a_e.shp')
+            .query('CSDNAME_L == "Toronto"')
+            .to_crs(epsg=4326)  # Set coordinate system
+    )
+
+streets.plot()
+
+
+fig, ax = plt.subplots(figsize=(100, 100))
+shapefile.plot(ax=ax, color='darkblue')
+# df.plot(ax=ax, alpha=0.2, color='red', markersize=100)
+streets.plot(ax=ax, alpha=0.7, color='orange')
+missing_road_class.plot(ax=ax, color='red', markersize=100)
+plt.axis('off')
+plt.show()
+
+
+
+
+filled_road_class = (
+                    gpd.sjoin_nearest(missing_road_class, streets, how='left')
+                    .loc[:, ['STREET1', 'STREET2', 'NAME_right', 'TYPE', 'CLASS']]
+                )
+
+street_class_code = {
+                       '10': 'Highway',
+                       '11': 'Expressway',
+                       '12': 'Primary highway',
+                       '13': 'Secondary highway',
+                       '20': 'Road',
+                       '21': 'Arterial',
+                       '22': 'Collector',
+                       '23': 'Local',
+                       '25': 'Connector/Ramp'
+       }
+
+filled_road_class['CLASS'] = filled_road_class['CLASS'].apply(lambda x: street_class_code[x])
+# .merge(streets, left_on="ok", right_index=True)
+
+
