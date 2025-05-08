@@ -78,7 +78,7 @@ def encode_datetime(df):
     df['DATETIME'] = (
                     (df['DATE'] + df['TIME'])
                     .pipe(pd.to_datetime, format='%Y-%m-%d%H%M')
-                    .dt.round(freq='1H')  # Round to nearest hour
+                    .dt.round(freq='1h')  # Round to nearest hour
         )
 
     df['YEAR'] = df['DATETIME'].dt.year
@@ -225,7 +225,7 @@ df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
 df = df.drop(columns='index_right', axis=1)
 
 # Filling in missing Road Classes
-missing_road_class = df.query('ROAD_CLASS == "None"')
+missing_road_class = df.query('ROAD_CLASS.isna() | ROAD_CLASS == "Pending"')
 
 
 streets = (
@@ -245,27 +245,51 @@ missing_road_class.plot(ax=ax, color='red', markersize=100)
 plt.axis('off')
 plt.show()
 
-
+temp = df.query('ROAD_CLASS == "Pending"')
 
 
 filled_road_class = (
                     gpd.sjoin_nearest(missing_road_class, streets, how='left')
-                    .loc[:, ['STREET1', 'STREET2', 'NAME_right', 'TYPE', 'CLASS']]
+                    #.loc[:, ['STREET1', 'STREET2', 'NAME_right', 'TYPE', 'CLASS']]
                 )
 
 street_class_code = {
-                       '10': 'Highway',
                        '11': 'Expressway',
-                       '12': 'Primary highway',
-                       '13': 'Secondary highway',
-                       '20': 'Road',
-                       '21': 'Arterial',
+                       '12': 'Expressway',  # Instead of Primary Highway
+                       '20': 'Local',  # Instead of Road
+                       '21': 'Major Arterial',  # Instead of Arterial
                        '22': 'Collector',
                        '23': 'Local',
-                       '25': 'Connector/Ramp'
+                       '25': 'Expressway Ramp'
        }
 
 filled_road_class['CLASS'] = filled_road_class['CLASS'].apply(lambda x: street_class_code[x])
-# .merge(streets, left_on="ok", right_index=True)
 
+# Manually correct arterial road classes
+arterials = filled_road_class.query('CLASS == "Major Arterial"')
 
+conditions = [
+    arterials['STREET2'] == '27 S 427 C S RAMP',
+    arterials['TYPE'].isin(['EXPY', 'PKY', 'HWY']),
+    arterials['_id'].isin([17374, 17375]),
+    arterials['_id'].isin([18555, 18556, 17203, 17204, 17205])
+    ]
+
+classes = [
+    'Expressway Ramp',
+    'Expressway',
+    'Laneway',
+    'Minor Arterial'
+    ]
+
+arterials['CLASS'] = np.select(conditions, classes, default=arterials['CLASS'])
+
+# Merge back into main dataframe
+filled_road_class.loc[filled_road_class['_id'].isin(arterials['_id']), 'CLASS'] = arterials['CLASS']
+df.loc[df['_id'].isin(filled_road_class['_id']), 'ROAD_CLASS'] = filled_road_class['CLASS']
+
+# Remove extra space from major arterial road class
+df['ROAD_CLASS'] = np.where(df['ROAD_CLASS'] == 'Major Arterial ',
+                            'Major Arterial',
+                            df['ROAD_CLASS']
+                        )
