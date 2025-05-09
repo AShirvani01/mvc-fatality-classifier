@@ -237,13 +237,14 @@ streets = (
 streets.plot()
 
 
-def plot_map(gdf, plot_all=False):
+def plot_map(gdf, colours=['red'], plot_all=False):
     fig, ax = plt.subplots(figsize=(100, 100))
     shapefile.plot(ax=ax, color='darkblue')
     streets.plot(ax=ax, alpha=0.7, color='orange')
     if plot_all:
         df.plot(ax=ax, alpha=0.2, color='red', markersize=100)
-    gdf.plot(ax=ax, color='red', markersize=100)
+    for i,x in enumerate(gdf):
+        x.plot(ax=ax, color=colours[i], markersize=100)
     plt.axis('off')
     plt.show()
 
@@ -303,8 +304,8 @@ df['ROAD_CLASS'] = np.where(
 
 # Fill in missing Districts
 missing_district = df.query('DISTRICT.isna()')
-
 plot_map(missing_district)
+
 filled_district = (
                     gpd.sjoin_nearest(missing_district,
                                       df.query('~DISTRICT.isna()'),
@@ -314,5 +315,4 @@ filled_district = (
 df.loc[df['_id'].isin(filled_district['_id_left']), 'DISTRICT'] = filled_district['DISTRICT_right']
 
 
-# ACCLOC 5000 missing
-# Fill in missing TRAFFCTL
+
