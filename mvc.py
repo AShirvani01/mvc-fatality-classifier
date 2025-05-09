@@ -302,6 +302,17 @@ df['ROAD_CLASS'] = np.where(
 
 
 # Fill in missing Districts
-temp = df.query('DISTRICT.isna()')
+missing_district = df.query('DISTRICT.isna()')
+
+plot_map(missing_district)
+filled_district = (
+                    gpd.sjoin_nearest(missing_district,
+                                      df.query('~DISTRICT.isna()'),
+                                      how='left')
+                    .drop_duplicates(subset=['_id_left'], keep='first')
+                )
+df.loc[df['_id'].isin(filled_district['_id_left']), 'DISTRICT'] = filled_district['DISTRICT_right']
+
+
 # ACCLOC 5000 missing
 # Fill in missing TRAFFCTL
