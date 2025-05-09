@@ -237,13 +237,18 @@ streets = (
 streets.plot()
 
 
-fig, ax = plt.subplots(figsize=(100, 100))
-shapefile.plot(ax=ax, color='darkblue')
-# df.plot(ax=ax, alpha=0.2, color='red', markersize=100)
-streets.plot(ax=ax, alpha=0.7, color='orange')
-missing_road_class.plot(ax=ax, color='red', markersize=100)
-plt.axis('off')
-plt.show()
+def plot_map(gdf, plot_all=False):
+    fig, ax = plt.subplots(figsize=(100, 100))
+    shapefile.plot(ax=ax, color='darkblue')
+    streets.plot(ax=ax, alpha=0.7, color='orange')
+    if plot_all:
+        df.plot(ax=ax, alpha=0.2, color='red', markersize=100)
+    gdf.plot(ax=ax, color='red', markersize=100)
+    plt.axis('off')
+    plt.show()
+
+
+plot_map(missing_road_class)
 
 temp = df.query('ROAD_CLASS == "Pending"')
 
@@ -289,7 +294,14 @@ filled_road_class.loc[filled_road_class['_id'].isin(arterials['_id']), 'CLASS'] 
 df.loc[df['_id'].isin(filled_road_class['_id']), 'ROAD_CLASS'] = filled_road_class['CLASS']
 
 # Remove extra space from major arterial road class
-df['ROAD_CLASS'] = np.where(df['ROAD_CLASS'] == 'Major Arterial ',
+df['ROAD_CLASS'] = np.where(
+                            df['ROAD_CLASS'] == 'Major Arterial ',
                             'Major Arterial',
                             df['ROAD_CLASS']
                         )
+
+
+# Fill in missing Districts
+temp = df.query('DISTRICT.isna()')
+# ACCLOC 5000 missing
+# Fill in missing TRAFFCTL
