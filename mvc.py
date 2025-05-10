@@ -237,7 +237,7 @@ streets = (
 streets.plot()
 
 
-def plot_map(gdf, colours=['red'], plot_all=False):
+def plot_map(gdf: list[gpd.GeoDataFrame], colours=['red'], plot_all=False):
     fig, ax = plt.subplots(figsize=(100, 100))
     shapefile.plot(ax=ax, color='darkblue')
     streets.plot(ax=ax, alpha=0.7, color='orange')
@@ -249,7 +249,7 @@ def plot_map(gdf, colours=['red'], plot_all=False):
     plt.show()
 
 
-plot_map(missing_road_class)
+plot_map([missing_road_class])
 
 temp = df.query('ROAD_CLASS == "Pending"')
 
@@ -304,7 +304,7 @@ df['ROAD_CLASS'] = np.where(
 
 # Fill in missing Districts
 missing_district = df.query('DISTRICT.isna()')
-plot_map(missing_district)
+plot_map([missing_district])
 
 filled_district = (
                     gpd.sjoin_nearest(missing_district,
@@ -315,4 +315,24 @@ filled_district = (
 df.loc[df['_id'].isin(filled_district['_id_left']), 'DISTRICT'] = filled_district['DISTRICT_right']
 
 
+# Fill in missing TRAFFCTL
+# df['TRAFFCTL'] = np.where(df['ACCLOC'] == 'Non Intersection',
+#                           'No Control',
+#                           df['TRAFFCTL'])
 
+missing_traffctl = df.query('TRAFFCTL.isna()')
+plot_map([missing_traffctl])
+
+
+
+filled_traffctl = (
+                    gpd.sjoin_nearest(missing_traffctl,
+                                      df.query('~TRAFFCTL.isna()'),
+                                      how='left',
+                                      distance_col='DIST')
+                    .drop_duplicates(subset=['_id_left'], keep='first')
+                )
+
+plot_map([df.loc[df['_id'].isin(filled_traffctl['_id_right'])], missing_traffctl], ['green','red'])
+
+df.loc[df['_id'].isin(filled_traffctl['_id']), 'TRAFFCTL'] = filled_traffctl['TRAFFCTL']
