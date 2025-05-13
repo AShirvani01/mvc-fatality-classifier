@@ -2,10 +2,6 @@
 import pandas as pd
 import numpy as np
 
-# To import dataset
-import requests
-from io import StringIO
-
 # For visuals
 import matplotlib.pyplot as plt
 
@@ -15,24 +11,19 @@ from shapely.geometry import shape
 import json
 from scipy.spatial import cKDTree
 
-
-def get_data():
-    """Returns the MVC dataset from open data Toronto."""
-    base_url = "https://ckan0.cf.opendata.inter.prod-toronto.ca"
-    url = f"{base_url}/api/3/action/package_show"
-    params = {
-        "id": ("motor-vehicle-collisions-involving-killed-or-"
-               "seriously-injured-persons")
-        }
-    package = requests.get(url, params=params).json()
-
-    resource = package['result']['resources'][0]
-    url = f"{base_url}/datastore/dump/{resource['id']}"
-    resource_dump_data = requests.get(url).text
-    return StringIO(resource_dump_data)
+from src.data import (
+    get_collision_data,
+    convert_to_geodata,
+    load_external_data
+)
+from src.config import (
+    HEALTH_SERVICES_PATH,
+    NEIGHBOURHOODS_PATH,
+    ROADS_PATH
+)
 
 
-df = pd.read_csv(get_data())
+df = get_collision_data()
 
 # EDA
 df.head(10)
@@ -93,22 +84,11 @@ df = encode_datetime(df)
 
 # Encoding Geo Data & Filling in missing neighbourhoods
 
-shapefile = (
-            gpd.read_file('data/toronto_neighbourhoods/neighbourhoods.shp')
-            .to_crs(epsg=4326)  # Set coordinate system
-    )
+shapefile = load_external_data(NEIGHBOURHOODS_PATH)
 shapefile.plot()
 
-df['geometry'] = (
-                df['geometry']
-                .apply(lambda x: shape(json.loads(x)).wkt)
-                .pipe(gpd.GeoSeries.from_wkt)
-    )
+gdf = convert_to_geodata(df).sjoin(shapefile, how='left')
 
-gdf = (
-       gpd.GeoDataFrame(df, crs="EPSG:4326", geometry="geometry")
-       .sjoin(shapefile, how="left")
-    )
 
 # Filling in neighbourhood missing in shapefile
 temp = gdf.query('NEIGHBOURHOOD_158 == "NSA" & NAME.isna()')
@@ -120,7 +100,7 @@ gdf.loc[cond, ['HOOD_158', 'NEIGHBOURHOOD_158']] = gdf.loc[cond, ['ID', 'NAME']]
 
 
 # Adding nearest hospital feature
-health_services = gpd.read_file('data/ontario_health_services.geojson')
+health_services = load_external_data(HEALTH_SERVICES_PATH)
 health_services_type_count = health_services['SERVICE_TY'].value_counts()
 
 # Filter for Toronto hospitals

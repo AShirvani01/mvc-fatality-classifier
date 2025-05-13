@@ -5,6 +5,9 @@ from io import StringIO
 from shapely.geometry import shape
 import json
 
+from pathlib import Path
+
+
 
 def get_collision_data() -> pd.DataFrame:
     """Pulls the collision dataset from the Open Data Toronto API.
@@ -53,19 +56,20 @@ def convert_to_geodata(df: pd.DataFrame, crs="EPSG:4326") -> gpd.GeoDataFrame:
     return gdf
 
 
-def convert_file_to_geodata(file, crs=4326):
+def load_external_data(file_path: Path, crs="EPSG:4326") -> gpd.GeoDataFrame:
+    """Load external data.
     
+    Args:
+        file_path (Path): File path to external data
+        crs: Coordinate Reference System of the data.
     
-    gpd.read_file('data/canada_roads/canada_roads.shp')
-    .to_crs(epsg=4326)  # Set coordinate system
+    Returns:
+        gpd.GeoDataFrame: Geodataframe with geometry column in WKT format.
+    """
     
+    gdf = gpd.read_file(file_path).to_crs(crs=crs)
     
-    
-    
-    
-    
-    
-    
+    return gdf
     
     
     
