@@ -340,3 +340,15 @@ df.loc[df['_id'].isin(filled_traffctl['_id_left']), 'TRAFFCTL'] = filled_traffct
 missing_visibility = df.query('VISIBILITY.isna()')
 plot_map([missing_visibility])
 
+filled_visibility = (
+                        pd.merge_asof(missing_visibility,
+                                      df.query('~VISIBILITY.isna()'),
+                                      on='DATETIME',
+                                      direction='nearest')
+    
+    )
+
+plot_map([df.loc[df['_id'].isin(filled_visibility['_id_y'])], missing_visibility], ['green','red'])
+
+df.loc[df['_id'].isin(filled_visibility['_id_x']), 'VISIBILITY'] = filled_visibility['VISIBILITY_y']
+
