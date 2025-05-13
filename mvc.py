@@ -94,7 +94,7 @@ df = encode_datetime(df)
 # Encoding Geo Data & Filling in missing neighbourhoods
 
 shapefile = (
-            gpd.read_file('toneighshape/Neighbourhoods_v2_region.shp')
+            gpd.read_file('data/toronto_neighbourhoods/neighbourhoods.shp')
             .to_crs(epsg=4326)  # Set coordinate system
     )
 shapefile.plot()
@@ -120,7 +120,7 @@ gdf.loc[cond, ['HOOD_158', 'NEIGHBOURHOOD_158']] = gdf.loc[cond, ['ID', 'NAME']]
 
 
 # Adding nearest hospital feature
-health_services = gpd.read_file('Ministry_of_Health_service_provider_locations.geojson')
+health_services = gpd.read_file('data/ontario_health_services.geojson')
 health_services_type_count = health_services['SERVICE_TY'].value_counts()
 
 # Filter for Toronto hospitals
@@ -229,7 +229,7 @@ missing_road_class = df.query('ROAD_CLASS.isna() | ROAD_CLASS == "Pending"')
 
 
 streets = (
-            gpd.read_file('lrnf000r21a_e/lrnf000r21a_e.shp')
+            gpd.read_file('data/canada_roads/canada_roads.shp')
             .query('CSDNAME_L == "Toronto"')
             .to_crs(epsg=4326)  # Set coordinate system
     )
@@ -323,8 +323,6 @@ df.loc[df['_id'].isin(filled_district['_id_left']), 'DISTRICT'] = filled_distric
 missing_traffctl = df.query('TRAFFCTL.isna()')
 plot_map([missing_traffctl])
 
-
-
 filled_traffctl = (
                     gpd.sjoin_nearest(missing_traffctl,
                                       df.query('~TRAFFCTL.isna()'),
@@ -335,4 +333,10 @@ filled_traffctl = (
 
 plot_map([df.loc[df['_id'].isin(filled_traffctl['_id_right'])], missing_traffctl], ['green','red'])
 
-df.loc[df['_id'].isin(filled_traffctl['_id']), 'TRAFFCTL'] = filled_traffctl['TRAFFCTL']
+df.loc[df['_id'].isin(filled_traffctl['_id_left']), 'TRAFFCTL'] = filled_traffctl['TRAFFCTL_right']
+
+
+# Fill in missing VISIBILITY
+missing_visibility = df.query('VISIBILITY.isna()')
+plot_map([missing_visibility])
+
