@@ -21,6 +21,11 @@ from src.config import (
     NEIGHBOURHOODS_PATH,
     ROADS_PATH
 )
+from src.constants import (
+    MUNICIPALITIES,
+    HOSPITAL_TYPES,
+    HOSPITAL_LIST
+)
 
 
 df = get_collision_data()
@@ -104,52 +109,13 @@ health_services = load_external_data(HEALTH_SERVICES_PATH)
 health_services_type_count = health_services['SERVICE_TY'].value_counts()
 
 # Filter for Toronto hospitals
-municipalities = [
-                'Scarborough',
-                'Toronto',
-                'North York',
-                'Etobicoke',
-                'East York',
-                'Mississauga',
-                'Brampton',
-                'Markham',
-                'Thornhill',
-                'Vaughan'
-    ]
-
-hospital_types = [
-                "Hospital - Site",
-                "Hospital - Corporation"
-    ]
-
 toronto_hospitals = health_services[
-                    (health_services['SERVICE_TY'].isin(hospital_types))
-                    & (health_services['COMMUNITY'].isin(municipalities))
-    ]
-
-hospital_list = [
-                    'Humber River Hospital - Wilson',
-                    'MacKenzie Health - Cortellucci Vaughan Hospital',
-                    'Oak Valley Health - Markham',
-                    'North York General Hospital - General Site',
-                    'Scarborough Health Network - Birchmount',
-                    'Scarborough Health Network - Scarborough General',
-                    'Scarborough Health Network - Centenary',
-                    'Sinai Health System - Mount Sinai',
-                    'Sunnybrook Health Sciences Centre - Bayview Campus',
-                    'Toronto East Health Network - Michael Garron Hospital',
-                    'Trillium Health Partners- Mississauga',
-                    'Trillium Health Partners - Credit Valley',
-                    "Unity Health Toronto - St. Joseph's",
-                    "Unity Health Toronto - St. Michael's",
-                    'University Health Network - Toronto General',
-                    'University Health Network - Toronto Western',
-                    'William Osler Health System - Etobicoke',
-                    'William Osler Health System - Civic'
+                    (health_services['SERVICE_TY'].isin(HOSPITAL_TYPES))
+                    & (health_services['COMMUNITY'].isin(MUNICIPALITIES))
     ]
 
 toronto_hospitals_with_er = health_services[
-                        health_services['ENGLISH_NA'].isin(hospital_list)
+                        health_services['ENGLISH_NA'].isin(HOSPITAL_LIST)
     ]
 
 
@@ -207,12 +173,7 @@ df = df.drop(columns='index_right', axis=1)
 # Filling in missing Road Classes
 missing_road_class = df.query('ROAD_CLASS.isna() | ROAD_CLASS == "Pending"')
 
-
-streets = (
-            gpd.read_file('data/canada_roads/canada_roads.shp')
-            .query('CSDNAME_L == "Toronto"')
-            .to_crs(epsg=4326)  # Set coordinate system
-    )
+streets = load_external_data(ROADS_PATH).query('CSDNAME_L == "Toronto"')
 
 streets.plot()
 
