@@ -1,0 +1,4 @@
+[project]
+name = "mvc_fatality_classifier"
+version = "0.1.0"
+dependencies = []
