@@ -1,0 +1,12 @@
+name: env1
+channels:
+  - defaults
+dependencies:
+  - spyder
+  - numpy
+  - pandas
+  - matplotlib
+  - geopandas
+  - pip
+  - pip:
+    - -e .
