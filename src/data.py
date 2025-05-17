@@ -73,7 +73,22 @@ def load_external_data(file_path: Path, crs="EPSG:4326") -> gpd.GeoDataFrame:
     return gdf
 
 
-def download_streets_data(output_dir: Path = DATA_DIR / "canada_streets"):
+def rename_files(path: Path, new_file_name: str) -> None:
+
+    if not path.exists():
+        raise FileNotFoundError("File or subdirectory doesn't exist. Check for"
+                                " typos and if files have been downloaded.")
+
+    if path.is_file():
+        path.rename(path.parent / new_file_name)
+
+    if path.is_dir():
+        for file in path.iterdir():
+            if file.is_file():
+                file.rename(path / f"{new_file_name}{file.suffix}")
+
+
+def download_streets_data(output_dir: Path = DATA_DIR / "canada_streets") -> None:
     base_url = "https://www12.statcan.gc.ca/census-recensement/2011"
     url = f"{base_url}/geo/RNF-FRR/files-fichiers/lrnf000r24a_e.zip"
     response = requests.get(url, stream=True)
@@ -87,19 +102,34 @@ def download_streets_data(output_dir: Path = DATA_DIR / "canada_streets"):
     rename_files(output_dir, 'canada_streets')
 
 
-def rename_files(path: Path, new_file_name):
+def download_hospital_data(output_dir: Path = DATA_DIR) -> None:
 
-    if not path.exists():
-        raise FileNotFoundError("File or subdirectory doesn't exist. Check for "
-                                "typos and if files have been downloaded.")
+    url = (
+        "https://ws.lioservices.lrc.gov.on.ca/arcgis2/rest/services/"
+        "LIO_OPEN_DATA/LIO_Open09/MapServer/26/query"
+    )
+    params = {
+        'outFields': '*',
+        'where': '1=1',
+        'f': 'geojson',
+        "resultOffset": 0
+    }
 
-    if path.is_file():
-        path.rename(path.parent / new_file_name)
-    
-    if path.is_dir():
-        for file in path.iterdir():
-            if file.is_file():
-                file.rename(path / f"{new_file_name}{file.suffix}")
+    features = []
 
+    while True:
+        response = requests.get(url, params=params).json()
 
+        if not response.get('features'):
+            break
 
+        features.extend(response['features'])
+        params['resultOffset'] += len(response['features'])
+
+    geojson = {
+        "type": "FeatureCollection",
+        "features": features,
+    }
+
+    with open(output_dir / "ontario_health_services.geojson", "w") as f:
+        json.dump(geojson, f)
