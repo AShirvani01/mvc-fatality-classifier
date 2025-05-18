@@ -6,6 +6,7 @@ from zipfile import ZipFile
 from shapely.geometry import shape
 import json
 from pathlib import Path
+from arcgis import GIS
 
 from config import DATA_DIR
 
@@ -89,8 +90,10 @@ def rename_files(path: Path, new_file_name: str) -> None:
 
 
 def download_streets_data(output_dir: Path = DATA_DIR / "canada_streets") -> None:
-    base_url = "https://www12.statcan.gc.ca/census-recensement/2011"
-    url = f"{base_url}/geo/RNF-FRR/files-fichiers/lrnf000r24a_e.zip"
+    url = (
+        "https://www12.statcan.gc.ca/census-recensement/2011"
+        "/geo/RNF-FRR/files-fichiers/lrnf000r24a_e.zip"
+    )
     response = requests.get(url, stream=True)
 
     output_dir.mkdir(exist_ok=True)
@@ -117,6 +120,7 @@ def download_hospital_data(output_dir: Path = DATA_DIR) -> None:
 
     features = []
 
+    # Bypass max query size (2000)
     while True:
         response = requests.get(url, params=params).json()
 
@@ -133,3 +137,24 @@ def download_hospital_data(output_dir: Path = DATA_DIR) -> None:
 
     with open(output_dir / "ontario_health_services.geojson", "w") as f:
         json.dump(geojson, f)
+
+
+def download_neighbourhood_data(output_dir: Path = DATA_DIR) -> None:
+    gis = GIS()
+
+    item_id = "5913f337900949d9be150ac6f203eefb"
+    item = gis.content.get(item_id)
+    feature_layer = item.layers[0]
+    url = f"{feature_layer.url}/query"
+
+    params = {
+        'outFields': '*',
+        'where': '1=1',
+        'f': 'geojson'
+    }
+
+    response = requests.get(url, params=params).json()
+    with open(output_dir / "toronto_neighbourhoods.geojson", 'w') as f:
+        json.dump(response, f)
+
+
