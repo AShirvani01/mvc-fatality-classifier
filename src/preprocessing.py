@@ -14,29 +14,32 @@ def encode_datetime(df: pd.DataFrame) -> pd.DataFrame:
         The input dataframe with added DATETIME, YEAR, MONTH, Day of the Week,
         and HOUR features.
     """
-    if 'TIME' or 'DATE' not in df.columns:
-        raise ValueError("TIME and/or DATE columns are not in the given Dataframe.")
+    # if 'TIME' or 'DATE' not in df.columns:
+    #     raise ValueError("TIME and/or DATE columns are not in the given Dataframe.")
+    try:
+        df['TIME'] = (
+                    df['TIME']
+                    .astype(str)
+                    .apply(lambda t: '0' * (4-len(t)) + t)  # Format to 'HHMM'
+        )
 
-    df['TIME'] = (
-                df['TIME']
-                .astype(str)
-                .apply(lambda t: '0' * (4-len(t)) + t)  # Format to 'HHMM'
-    )
+        df['DATETIME'] = (
+                        (df['DATE'] + df['TIME'])
+                        .pipe(pd.to_datetime, format='%Y-%m-%d%H%M')
+                        .dt.round(freq='1h')  # Round to nearest hour
+        )
 
-    df['DATETIME'] = (
-                    (df['DATE'] + df['TIME'])
-                    .pipe(pd.to_datetime, format='%Y-%m-%d%H%M')
-                    .dt.round(freq='1h')  # Round to nearest hour
-    )
+        df['YEAR'] = df['DATETIME'].dt.year
+        df['MONTH'] = df['DATETIME'].dt.month_name()
+        df['DOW'] = df['DATETIME'].dt.day_name()
+        df['HOUR'] = df['DATETIME'].dt.hour
 
-    df['YEAR'] = df['DATETIME'].dt.year
-    df['MONTH'] = df['DATETIME'].dt.month_name()
-    df['DOW'] = df['DATETIME'].dt.day_name()
-    df['HOUR'] = df['DATETIME'].dt.hour
+        df = df.drop(columns=['TIME', 'DATE'], axis=1)
 
-    df = df.drop(columns=['TIME', 'DATE'], axis=1)
+        return df
 
-    return df
+    except KeyError:
+        print("TIME and/or DATE columns are not in the given Dataframe.")
 
 
 def dist_to_nearest_hospital(
