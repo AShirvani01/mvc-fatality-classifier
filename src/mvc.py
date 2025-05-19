@@ -2,44 +2,35 @@
 import pandas as pd
 import numpy as np
 
-# For visuals
-import matplotlib.pyplot as plt
-
 # For geodata
 import geopandas as gpd
-from shapely.geometry import shape
-import json
-from scipy.spatial import cKDTree
 
-from src.data import (
+from data import (
     get_collision_data,
     convert_to_geodata,
-    load_external_data
+    load_external_data,
+    download_streets_data
 )
-from src.config import (
+from config import (
     HEALTH_SERVICES_PATH,
     NEIGHBOURHOODS_PATH,
-    ROADS_PATH
+    STREETS_PATH
 )
-from src.constants import (
+from constants import (
     MUNICIPALITIES,
     HOSPITAL_TYPES,
     HOSPITAL_LIST
 )
+from preprocessing import (
+    encode_datetime,
+    dist_to_nearest_hospital
+)
+from visualize import plot_map
 
 
 df = get_collision_data()
+gdf = convert_to_geodata(df)
 
-# EDA
-df.head(10)
-df.info()
-df.isnull().sum()
-df.duplicated().sum()
-
-accident_class_count = df['ACCLASS'].value_counts()
-road_class_count = df['ROAD_CLASS'].value_counts()
-hood_count = df['NEIGHBOURHOOD_158'].value_counts()
-missing_hoods = df.query('NEIGHBOURHOOD_158 == "NSA"')
 
 # plt.hist(df.query('ROAD_CLASS == "Major Arterial"')['HOUR'])
 # plt.show()
@@ -48,51 +39,18 @@ missing_hoods = df.query('NEIGHBOURHOOD_158 == "NSA"')
 
 # Response
 
-# df.query('ACCLASS == ["Property Damage O", "None"]')
 df = df.query('ACCLASS != ["Property Damage O", "None"]')  # Remove rare classes
 
 
 # Features
-
-# Encoding Date/Time
-def encode_datetime(df):
-    """Encodes date and time into multiple features.
-
-    Args:
-        df: A Pandas DataFrame with DATE and TIME columns.
-
-    Returns:
-        The input dataframe with added DATETIME, YEAR, MONTH, Day of the Week,
-        and HOUR features.
-    """
-    df['TIME'] = (
-                df['TIME']
-                .astype(str)
-                .apply(lambda t: '0' * (4-len(t)) + t)  # Format to 'HHMM'
-        )
-
-    df['DATETIME'] = (
-                    (df['DATE'] + df['TIME'])
-                    .pipe(pd.to_datetime, format='%Y-%m-%d%H%M')
-                    .dt.round(freq='1h')  # Round to nearest hour
-        )
-
-    df['YEAR'] = df['DATETIME'].dt.year
-    df['MONTH'] = df['DATETIME'].dt.month_name()
-    df['DOW'] = df['DATETIME'].dt.day_name()
-    df['HOUR'] = df['DATETIME'].dt.hour
-
-    return df
-
 
 df = encode_datetime(df)
 
 # Encoding Geo Data & Filling in missing neighbourhoods
 
 shapefile = load_external_data(NEIGHBOURHOODS_PATH)
-shapefile.plot()
 
-gdf = convert_to_geodata(df).sjoin(shapefile, how='left')
+gdf = gdf.sjoin(shapefile, how='left')
 
 
 # Filling in neighbourhood missing in shapefile
@@ -118,32 +76,6 @@ toronto_hospitals_with_er = health_services[
                         health_services['ENGLISH_NA'].isin(HOSPITAL_LIST)
     ]
 
-
-def dist_to_nearest_hospital(gdf_A, gdf_B):
-    """Finds distance to nearest hospital from location of collisions.
-
-    Args:
-        gdf_A: GeoDataFrame of the collisions.
-        gdf_B: GeoDataFrame of the hospitals.
-
-    Returns:
-        The input GeoDataFrame A with added DIST_TO_HOS feature.
-    """
-    nA = np.array(list(gdf_A['geometry'].apply(lambda x: (x.x, x.y))))
-    nB = np.array(list(gdf_B['geometry'].apply(lambda x: (x.x, x.y))))
-    btree = cKDTree(nB)
-    dist, idx = btree.query(nA, k=1, p=1)  # Manhattan distance
-    gdf_B_nearest = (
-                    gdf_B.iloc[idx]
-                    .drop(columns='geometry')
-                    .reset_index(drop=True)
-        )
-    gdf = pd.concat([gdf_A.reset_index(drop=True),
-                     gdf_B_nearest['ENGLISH_NA'],
-                     pd.Series(dist, name='DIST_TO_HOS')],
-                    axis=1)
-
-    return gdf
 
 
 df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
@@ -173,21 +105,7 @@ df = df.drop(columns='index_right', axis=1)
 # Filling in missing Road Classes
 missing_road_class = df.query('ROAD_CLASS.isna() | ROAD_CLASS == "Pending"')
 
-streets = load_external_data(ROADS_PATH).query('CSDNAME_L == "Toronto"')
-
-streets.plot()
-
-
-def plot_map(gdf: list[gpd.GeoDataFrame], colours=['red'], plot_all=False):
-    fig, ax = plt.subplots(figsize=(100, 100))
-    shapefile.plot(ax=ax, color='darkblue')
-    streets.plot(ax=ax, alpha=0.7, color='orange')
-    if plot_all:
-        df.plot(ax=ax, alpha=0.2, color='red', markersize=100)
-    for i,x in enumerate(gdf):
-        x.plot(ax=ax, color=colours[i], markersize=100)
-    plt.axis('off')
-    plt.show()
+streets = load_external_data(STREETS_PATH).query('CSDNAME_L == "Toronto"')
 
 
 plot_map([missing_road_class])
