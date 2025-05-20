@@ -76,7 +76,7 @@ def load_external_data(file_path: Path, crs="EPSG:4326") -> gpd.GeoDataFrame:
 
 def download_streets_data(output_dir: Path = DATA_DIR / "canada_streets") -> None:
     
-    if output_dir.glob('canada_streets.*').exists():
+    if (output_dir / 'canada_streets.shp').exists():
         print(f"{output_dir}/canada_streets.shp already exists.")
         return
 
