@@ -75,6 +75,11 @@ def load_external_data(file_path: Path, crs="EPSG:4326") -> gpd.GeoDataFrame:
 
 
 def download_streets_data(output_dir: Path = DATA_DIR / "canada_streets") -> None:
+    
+    if output_dir.glob('canada_streets.*').exists():
+        print(f"{output_dir}/canada_streets.shp already exists.")
+        return
+
     url = (
         "https://www12.statcan.gc.ca/census-recensement/2011"
         "/geo/RNF-FRR/files-fichiers/lrnf000r24a_e.zip"
@@ -90,6 +95,12 @@ def download_streets_data(output_dir: Path = DATA_DIR / "canada_streets") -> Non
 
 
 def download_hospital_data(output_dir: Path = DATA_DIR) -> None:
+    
+    file_name = 'ontario_health_services.geojson'
+
+    if (output_dir / file_name).exists():
+        print(f"{output_dir}/{file_name} already exists.")
+        return
 
     url = (
         "https://ws.lioservices.lrc.gov.on.ca/arcgis2/rest/services/"
@@ -99,7 +110,7 @@ def download_hospital_data(output_dir: Path = DATA_DIR) -> None:
         'outFields': '*',
         'where': '1=1',
         'f': 'geojson',
-        "resultOffset": 0
+        'resultOffset': 0
     }
 
     features = []
@@ -115,15 +126,22 @@ def download_hospital_data(output_dir: Path = DATA_DIR) -> None:
         params['resultOffset'] += len(response['features'])
 
     geojson = {
-        "type": "FeatureCollection",
-        "features": features,
+        'type': 'FeatureCollection',
+        'features': features,
     }
 
-    with open(output_dir / "ontario_health_services.geojson", "w") as f:
+    with open(output_dir / file_name, 'w') as f:
         json.dump(geojson, f)
 
 
 def download_neighbourhood_data(output_dir: Path = DATA_DIR) -> None:
+
+    file_name = 'toronto_neighbourhoods.geojson'
+
+    if (output_dir / file_name).exists():
+        print(f"{output_dir}/{file_name} already exists.")
+        return
+
     gis = GIS()
 
     item_id = "5913f337900949d9be150ac6f203eefb"
@@ -138,7 +156,7 @@ def download_neighbourhood_data(output_dir: Path = DATA_DIR) -> None:
     }
 
     response = requests.get(url, params=params).json()
-    with open(output_dir / "toronto_neighbourhoods.geojson", 'w') as f:
+    with open(output_dir / file_name, 'w') as f:
         json.dump(response, f)
 
 
