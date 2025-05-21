@@ -68,7 +68,7 @@ def dist_to_nearest_hospital(
     gdf = pd.concat(
         [
             collisions.reset_index(drop=True),
-            hospitals_nearest['ENGLISH_NA'],
+            hospitals_nearest['ENGLISH_NAME'],
             pd.Series(dist, name='DIST_TO_HOS')
         ],
         axis=1
@@ -106,3 +106,64 @@ def filter_toronto_hospitals_with_er(health_services: gpd.GeoDataFrame) -> gpd.G
     ]
 
     return toronto_hospitals_with_er
+
+
+def fill_missing_road_classes(
+        collisions: gpd.GeoDataFrame,
+        streets: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """Fill road classes in collision Geodataframe labelled 'Pending' or NA
+
+    Args:
+        collisions: Geoedataframe of the collision data
+        streets: Geodataframe of the street data
+
+    Returns:
+        The input collisions Geodataframe with filled in road classes.
+    """
+    missing_road_class = collisions.query('ROAD_CLASS.isna() | ROAD_CLASS == "Pending"')
+    filled_road_class = missing_road_class.sjoin_nearest(streets, how='left')
+
+    street_class_code = {
+        '11': 'Expressway',
+        '12': 'Expressway',  # Instead of Primary Highway
+        '20': 'Local',  # Instead of Road
+        '21': 'Major Arterial',  # Instead of Arterial
+        '22': 'Collector',
+        '23': 'Local',
+        '25': 'Expressway Ramp'
+    }
+
+    filled_road_class['CLASS'] = filled_road_class['CLASS'].apply(lambda x: street_class_code[x])
+
+    # Manually correct arterial road class edge cases
+    arterials = filled_road_class.query('CLASS == "Major Arterial"')
+
+    conditions = [
+        arterials['STREET2'] == '27 S 427 C S RAMP',
+        arterials['TYPE'].isin(['EXPY', 'PKY', 'HWY']),
+        arterials['_id'].isin([17374, 17375]),
+        arterials['_id'].isin([18555, 18556, 17203, 17204, 17205])
+    ]
+
+    classes = [
+        'Expressway Ramp',
+        'Expressway',
+        'Laneway',
+        'Minor Arterial'
+    ]
+
+    arterials['CLASS'] = np.select(conditions, classes, default=arterials['CLASS'])
+
+    # Merge back into collisions dataframe
+    filled_road_class.loc[
+        filled_road_class['_id'].isin(arterials['_id']),
+        'CLASS'
+    ] = arterials['CLASS']
+
+    collisions.loc[
+        collisions['_id'].isin(filled_road_class['_id']),
+        'ROAD_CLASS'
+    ] = filled_road_class['CLASS']
+
+    return collisions

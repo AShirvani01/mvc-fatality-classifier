@@ -18,16 +18,12 @@ from config import (
     NEIGHBOURHOODS_PATH,
     STREETS_PATH
 )
-from constants import (
-    MUNICIPALITIES,
-    HOSPITAL_TYPES,
-    HOSPITAL_LIST
-)
 from preprocessing import (
     encode_datetime,
     dist_to_nearest_hospital,
     fill_missing_neighbourhoods,
-    filter_toronto_hospitals_with_er
+    filter_toronto_hospitals_with_er,
+    fill_missing_road_classes
 )
 from visualize import plot_map
 
@@ -51,63 +47,12 @@ gdf = fill_missing_neighbourhoods(gdf, neighbourhood_gdf)
 # Adding nearest hospital feature
 health_services = load_external_data(HEALTH_SERVICES_PATH)
 toronto_hospitals_with_er = filter_toronto_hospitals_with_er(health_services)
-
-
 df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
 
 
-df = df.drop(columns='index_right', axis=1)
-
 # Filling in missing Road Classes
-missing_road_class = df.query('ROAD_CLASS.isna() | ROAD_CLASS == "Pending"')
-
 streets = load_external_data(STREETS_PATH).query('CSDNAME_L == "Toronto"')
-
-
-plot_map([missing_road_class])
-
-temp = df.query('ROAD_CLASS == "Pending"')
-
-
-filled_road_class = (
-                    gpd.sjoin_nearest(missing_road_class, streets, how='left')
-                    #.loc[:, ['STREET1', 'STREET2', 'NAME_right', 'TYPE', 'CLASS']]
-                )
-
-street_class_code = {
-                       '11': 'Expressway',
-                       '12': 'Expressway',  # Instead of Primary Highway
-                       '20': 'Local',  # Instead of Road
-                       '21': 'Major Arterial',  # Instead of Arterial
-                       '22': 'Collector',
-                       '23': 'Local',
-                       '25': 'Expressway Ramp'
-       }
-
-filled_road_class['CLASS'] = filled_road_class['CLASS'].apply(lambda x: street_class_code[x])
-
-# Manually correct arterial road classes
-arterials = filled_road_class.query('CLASS == "Major Arterial"')
-
-conditions = [
-    arterials['STREET2'] == '27 S 427 C S RAMP',
-    arterials['TYPE'].isin(['EXPY', 'PKY', 'HWY']),
-    arterials['_id'].isin([17374, 17375]),
-    arterials['_id'].isin([18555, 18556, 17203, 17204, 17205])
-    ]
-
-classes = [
-    'Expressway Ramp',
-    'Expressway',
-    'Laneway',
-    'Minor Arterial'
-    ]
-
-arterials['CLASS'] = np.select(conditions, classes, default=arterials['CLASS'])
-
-# Merge back into main dataframe
-filled_road_class.loc[filled_road_class['_id'].isin(arterials['_id']), 'CLASS'] = arterials['CLASS']
-df.loc[df['_id'].isin(filled_road_class['_id']), 'ROAD_CLASS'] = filled_road_class['CLASS']
+gdf = fill_missing_road_classes(df, streets)
 
 # Remove extra space from major arterial road class
 df['ROAD_CLASS'] = np.where(
