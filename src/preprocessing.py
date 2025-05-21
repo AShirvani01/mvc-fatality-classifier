@@ -74,3 +74,25 @@ def dist_to_nearest_hospital(
     )
 
     return gdf
+
+
+def fill_missing_neighbourhoods(
+    collisions: gpd.GeoDataFrame,
+    neighbourhoods: gpd.GeoDataFrame
+) -> gpd.GeoDataFrame:
+    """Fill neighbourhoods in collision Geodataframe labelled 'NSA'
+
+    Args:
+        collisions: Geodataframe of the collision data
+        neighbourhoods: Geodataframe of the neighbourhood data
+
+    Returns:
+        The input collisions Geodataframe with filled in neighbourhoods.
+    """
+    gdf = collisions.sjoin_nearest(neighbourhoods, how='left')
+
+    condition = collisions['NEIGHBOURHOOD_158'] == 'NSA'
+    collisions.loc[condition, ['HOOD_158', 'NEIGHBOURHOOD_158']] = \
+        gdf.loc[condition, ['Local_ID', 'NHName']].to_numpy()
+
+    return collisions

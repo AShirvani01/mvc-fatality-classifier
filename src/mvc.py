@@ -9,6 +9,8 @@ from data import (
     get_collision_data,
     convert_to_geodata,
     load_external_data,
+    download_hospital_data,
+    download_neighbourhood_data,
     download_streets_data
 )
 from config import (
@@ -23,44 +25,27 @@ from constants import (
 )
 from preprocessing import (
     encode_datetime,
-    dist_to_nearest_hospital
+    dist_to_nearest_hospital,
+    fill_missing_neighbourhoods
 )
 from visualize import plot_map
 
 
-df = get_collision_data()
-gdf = convert_to_geodata(df)
+raw_collision_data = get_collision_data()
+gdf = convert_to_geodata(raw_collision_data)
+download_hospital_data()
+download_neighbourhood_data()
+download_streets_data()
 
-
-# plt.hist(df.query('ROAD_CLASS == "Major Arterial"')['HOUR'])
-# plt.show()
 
 # DATA PREPROCESSING
 
-# Response
-
-df = df.query('ACCLASS != ["Property Damage O", "None"]')  # Remove rare classes
-
-
-# Features
-
-df = encode_datetime(df)
+gdf = encode_datetime(gdf)
 
 # Encoding Geo Data & Filling in missing neighbourhoods
 
-shapefile = load_external_data(NEIGHBOURHOODS_PATH)
-
-gdf = gdf.sjoin(shapefile, how='left')
-
-
-# Filling in neighbourhood missing in shapefile
-temp = gdf.query('NEIGHBOURHOOD_158 == "NSA" & NAME.isna()')
-gdf['NAME'] = gdf['NAME'].apply(lambda x: 'Morningside Heights' if x != x else x)
-gdf['ID'] = gdf['ID'].apply(lambda x: 144 if x != x else x)
-
-cond = (gdf['NEIGHBOURHOOD_158'] == "NSA") & (gdf['NAME'].isna())
-gdf.loc[cond, ['HOOD_158', 'NEIGHBOURHOOD_158']] = gdf.loc[cond, ['ID', 'NAME']]
-
+neighbourhood_gdf = load_external_data(NEIGHBOURHOODS_PATH)
+gdf = fill_missing_neighbourhoods(gdf, neighbourhood_gdf)
 
 # Adding nearest hospital feature
 health_services = load_external_data(HEALTH_SERVICES_PATH)
@@ -75,7 +60,6 @@ toronto_hospitals = health_services[
 toronto_hospitals_with_er = health_services[
                         health_services['ENGLISH_NA'].isin(HOSPITAL_LIST)
     ]
-
 
 
 df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
