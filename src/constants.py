@@ -13,19 +13,16 @@ MUNICIPALITIES = [
     'Vaughan'
 ]
 
-HOSPITAL_TYPES = ["Hospital - Site", "Hospital - Corporation"]
-
 HOSPITAL_LIST = [
-    'Humber River Hospital - Wilson',
+    'Humber River Health - Wilson',
     'MacKenzie Health - Cortellucci Vaughan Hospital',
-    'Oak Valley Health - Markham',
     'North York General Hospital - General Site',
+    'Oak Valley Health - Markham',
     'Scarborough Health Network - Birchmount',
     'Scarborough Health Network - Scarborough General',
     'Scarborough Health Network - Centenary',
-    'Sinai Health System - Mount Sinai',
     'Sunnybrook Health Sciences Centre - Bayview Campus',
-    'Toronto East Health Network - Michael Garron Hospital',
+    'Michael Garron Hospital',
     'Trillium Health Partners- Mississauga',
     'Trillium Health Partners - Credit Valley',
     "Unity Health Toronto - St. Joseph's",

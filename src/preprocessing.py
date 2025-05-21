@@ -2,6 +2,7 @@ import pandas as pd
 import geopandas as gpd
 import numpy as np
 from scipy.spatial import cKDTree
+from constants import HOSPITAL_LIST
 
 
 def encode_datetime(df: pd.DataFrame) -> pd.DataFrame:
@@ -96,3 +97,12 @@ def fill_missing_neighbourhoods(
         gdf.loc[condition, ['Local_ID', 'NHName']].to_numpy()
 
     return collisions
+
+
+def filter_toronto_hospitals_with_er(health_services: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Filter health services Geodataframe down to Toronto hospitals with ER."""
+    toronto_hospitals_with_er = health_services[
+        health_services['ENGLISH_NAME'].isin(HOSPITAL_LIST)
+    ]
+
+    return toronto_hospitals_with_er

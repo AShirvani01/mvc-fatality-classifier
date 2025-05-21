@@ -26,7 +26,8 @@ from constants import (
 from preprocessing import (
     encode_datetime,
     dist_to_nearest_hospital,
-    fill_missing_neighbourhoods
+    fill_missing_neighbourhoods,
+    filter_toronto_hospitals_with_er
 )
 from visualize import plot_map
 
@@ -49,40 +50,11 @@ gdf = fill_missing_neighbourhoods(gdf, neighbourhood_gdf)
 
 # Adding nearest hospital feature
 health_services = load_external_data(HEALTH_SERVICES_PATH)
-health_services_type_count = health_services['SERVICE_TY'].value_counts()
-
-# Filter for Toronto hospitals
-toronto_hospitals = health_services[
-                    (health_services['SERVICE_TY'].isin(HOSPITAL_TYPES))
-                    & (health_services['COMMUNITY'].isin(MUNICIPALITIES))
-    ]
-
-toronto_hospitals_with_er = health_services[
-                        health_services['ENGLISH_NA'].isin(HOSPITAL_LIST)
-    ]
+toronto_hospitals_with_er = filter_toronto_hospitals_with_er(health_services)
 
 
 df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
-# df = df.drop(columns=['_id',
-#                       'ACCNUM',
-#                       'DATE',
-#                       'TIME',
-#                       'DATETIME',
-#                       'DISTRICT',
-#                       'NEIGHBOURHOOD_158',
-#                       'HOOD_140',
-#                       'NEIGHBOURHOOD_140',
-#                       'DIVISION',
-#                       'geometry',
-#                       'STREET1',
-#                       'STREET2',
-#                       'OFFSET',
-#                       'INJURY',
-#                       'FATAL_NO',
-#                       'index_right',
-#                       'ID',
-#                       'NAME',
-#                       'ENGLISH_NA'], axis=1)
+
 
 df = df.drop(columns='index_right', axis=1)
 
