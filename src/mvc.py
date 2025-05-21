@@ -23,7 +23,8 @@ from preprocessing import (
     dist_to_nearest_hospital,
     fill_missing_neighbourhoods,
     filter_toronto_hospitals_with_er,
-    fill_missing_road_classes
+    fill_missing_road_classes,
+    remove_whitespace
 )
 from visualize import plot_map
 
@@ -36,6 +37,7 @@ download_streets_data()
 
 
 # DATA PREPROCESSING
+gdf = remove_whitespace(gdf)
 
 gdf = encode_datetime(gdf)
 
@@ -54,12 +56,6 @@ df = dist_to_nearest_hospital(gdf, toronto_hospitals_with_er)
 streets = load_external_data(STREETS_PATH).query('CSDNAME_L == "Toronto"')
 gdf = fill_missing_road_classes(df, streets)
 
-# Remove extra space from major arterial road class
-df['ROAD_CLASS'] = np.where(
-                            df['ROAD_CLASS'] == 'Major Arterial ',
-                            'Major Arterial',
-                            df['ROAD_CLASS']
-                        )
 
 
 # Fill in missing Districts

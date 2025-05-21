@@ -167,3 +167,13 @@ def fill_missing_road_classes(
     ] = filled_road_class['CLASS']
 
     return collisions
+
+
+def remove_whitespace(collisions: pd.DataFrame) -> pd.DataFrame:
+    """Remove leading and trailing whitespace in collisions Dataframe."""
+    for feature in collisions.columns:
+        collisions[feature] = collisions[feature].apply(
+            lambda x: x.strip() if isinstance(x, str) else x
+        )
+
+    return collisions
