@@ -24,7 +24,8 @@ from preprocessing import (
     fill_missing_neighbourhoods,
     filter_toronto_hospitals_with_er,
     fill_missing_road_classes,
-    remove_whitespace
+    remove_whitespace,
+    fill_missing_district
 )
 from visualize import plot_map
 
@@ -57,18 +58,8 @@ streets = load_external_data(STREETS_PATH).query('CSDNAME_L == "Toronto"')
 gdf = fill_missing_road_classes(df, streets)
 
 
-
 # Fill in missing Districts
-missing_district = df.query('DISTRICT.isna()')
-plot_map([missing_district])
-
-filled_district = (
-                    gpd.sjoin_nearest(missing_district,
-                                      df.query('~DISTRICT.isna()'),
-                                      how='left')
-                    .drop_duplicates(subset=['_id_left'], keep='first')
-                )
-df.loc[df['_id'].isin(filled_district['_id_left']), 'DISTRICT'] = filled_district['DISTRICT_right']
+gdf = fill_missing_district(gdf)
 
 
 # Fill in missing TRAFFCTL
@@ -100,8 +91,8 @@ filled_visibility = (
                         pd.merge_asof(missing_visibility,
                                       df.query('~VISIBILITY.isna()'),
                                       on='DATETIME',
-                                      direction='nearest')
-    
+                                      direction='nearest',
+                                      tolerance=pd.Timedelta(1,'hr'))
     )
 
 plot_map([df.loc[df['_id'].isin(filled_visibility['_id_y'])], missing_visibility], ['green','red'])

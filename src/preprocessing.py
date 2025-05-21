@@ -177,3 +177,22 @@ def remove_whitespace(collisions: pd.DataFrame) -> pd.DataFrame:
         )
 
     return collisions
+
+
+def fill_missing_district(collisions: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Fill in missing district """
+    missing_district = collisions.query('DISTRICT.isna()')
+    labelled_district = collisions.query('~DISTRICT.isna()')
+
+    filled_district = (
+        missing_district
+        .sjoin_nearest(labelled_district, how='left')
+        .drop_duplicates(subset=['_id_left'], keep='first')
+    )
+
+    collisions.loc[
+        collisions['_id'].isin(filled_district['_id_left']),
+        'DISTRICT'
+    ] = filled_district['DISTRICT_right']
+
+    return collisions
