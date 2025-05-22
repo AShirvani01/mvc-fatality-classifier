@@ -94,7 +94,7 @@ def fill_missing_neighbourhoods(
 
     condition = collisions['NEIGHBOURHOOD_158'] == 'NSA'
     collisions.loc[condition, ['HOOD_158', 'NEIGHBOURHOOD_158']] = \
-        gdf.loc[condition, ['Local_ID', 'NHName']].to_numpy()
+        gdf.loc[condition, ['Local_ID', 'NHName']].values
 
     return collisions
 
@@ -159,12 +159,12 @@ def fill_missing_road_classes(
     filled_road_class.loc[
         filled_road_class['_id'].isin(arterials['_id']),
         'CLASS'
-    ] = arterials['CLASS']
+    ] = arterials['CLASS'].values
 
     collisions.loc[
         collisions['_id'].isin(filled_road_class['_id']),
         'ROAD_CLASS'
-    ] = filled_road_class['CLASS']
+    ] = filled_road_class['CLASS'].values
 
     return collisions
 
@@ -193,7 +193,7 @@ def fill_missing_district(collisions: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     collisions.loc[
         collisions['_id'].isin(filled_district['_id_left']),
         'DISTRICT'
-    ] = filled_district['DISTRICT_right']
+    ] = filled_district['DISTRICT_right'].values
 
     return collisions
 
@@ -212,7 +212,7 @@ def fill_missing_traffctl(collisions: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     collisions.loc[
         collisions['_id'].isin(filled_traffctl['_id_left']),
         'TRAFFCTL'
-    ] = filled_traffctl['TRAFFCTL_right']
+    ] = filled_traffctl['TRAFFCTL_right'].values
 
     return collisions
 
@@ -228,13 +228,52 @@ def fill_missing_visibility(collisions: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
             labelled_visibility,
             on='DATETIME',
             direction='nearest',
-            tolerance=pd.Timedelta(1, 'hr')
+            tolerance=pd.Timedelta(2, 'days')
         )
     )
 
     collisions.loc[
         collisions['_id'].isin(filled_visibility['_id_x']),
         'VISIBILITY'
-    ] = filled_visibility['VISIBILITY_y']
+    ] = filled_visibility['VISIBILITY_y'].values
+
+    return collisions
+
+
+
+def fill_nearest_temporal(
+    collisions: pd.DataFrame,
+    features: list[str],
+    tolerance: pd.Timedelta = pd.Timedelta(2, 'days')
+) -> pd.DataFrame:
+    """Fill all missing values in each given feature with the (temporally)
+    closest rows with labelled (non-missing) values.
+
+    Args:
+        collisions: Dataframe of the collision data with DATETIME feature.
+        features: list of features to apply transformation.
+        tolerance (pd.Timedelta): max time away from missing point that will
+            be accepted. If greater than tolerance, returns None.
+
+    Returns:
+        pd.Dataframe: Input collision Dataframe with the features filled.
+    """
+    for feature in features:
+        missing_rows = collisions.query(f'{feature}.isna()')
+        labelled_rows = collisions.query(f'~{feature}.isna()')
+
+        filled_rows = (
+            pd.merge_asof(
+                missing_rows,
+                labelled_rows,
+                on='DATETIME',
+                direction='nearest',
+                tolerance=tolerance
+            )
+        )
+
+        collisions.loc[
+            collisions['_id'].isin(filled_rows['_id_x']), feature
+        ] = filled_rows[f'{feature}_y'].values
 
     return collisions
