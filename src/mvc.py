@@ -25,7 +25,8 @@ from preprocessing import (
     filter_toronto_hospitals_with_er,
     fill_missing_road_classes,
     remove_whitespace,
-    fill_missing_district
+    fill_missing_district,
+    fill_missing_traffctl
 )
 from visualize import plot_map
 
@@ -43,7 +44,6 @@ gdf = remove_whitespace(gdf)
 gdf = encode_datetime(gdf)
 
 # Encoding Geo Data & Filling in missing neighbourhoods
-
 neighbourhood_gdf = load_external_data(NEIGHBOURHOODS_PATH)
 gdf = fill_missing_neighbourhoods(gdf, neighbourhood_gdf)
 
@@ -61,26 +61,8 @@ gdf = fill_missing_road_classes(df, streets)
 # Fill in missing Districts
 gdf = fill_missing_district(gdf)
 
-
 # Fill in missing TRAFFCTL
-# df['TRAFFCTL'] = np.where(df['ACCLOC'] == 'Non Intersection',
-#                           'No Control',
-#                           df['TRAFFCTL'])
-
-missing_traffctl = df.query('TRAFFCTL.isna()')
-plot_map([missing_traffctl])
-
-filled_traffctl = (
-                    gpd.sjoin_nearest(missing_traffctl,
-                                      df.query('~TRAFFCTL.isna()'),
-                                      how='left',
-                                      distance_col='DIST')
-                    .drop_duplicates(subset=['_id_left'], keep='first')
-                )
-
-plot_map([df.loc[df['_id'].isin(filled_traffctl['_id_right'])], missing_traffctl], ['green','red'])
-
-df.loc[df['_id'].isin(filled_traffctl['_id_left']), 'TRAFFCTL'] = filled_traffctl['TRAFFCTL_right']
+gdf = fill_missing_traffctl(gdf)
 
 
 # Fill in missing VISIBILITY
