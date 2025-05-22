@@ -179,66 +179,32 @@ def remove_whitespace(collisions: pd.DataFrame) -> pd.DataFrame:
     return collisions
 
 
-def fill_missing_district(collisions: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Fill in missing district."""
-    missing_district = collisions.query('DISTRICT.isna()')
-    labelled_district = collisions.query('~DISTRICT.isna()')
+def fill_nearest_spatial(
+    collisions: gpd.GeoDataFrame,
+    features: list[str]
+) -> gpd.GeoDataFrame:
+    """Fill all missing values in each given feature with the (spatially)
+    closest rows with labelled (non-missing) values.
 
-    filled_district = (
-        missing_district
-        .sjoin_nearest(labelled_district, how='left')
-        .drop_duplicates(subset=['_id_left'], keep='first')
-    )
+    Args:
+        collisions: GeoDataframe of the collision data.
+        features: list of features to apply transformation.
+    """
+    for feature in features:
+        missing_rows = collisions.query(f'{feature}.isna()')
+        labelled_rows = collisions.query(f'~{feature}.isna()')
 
-    collisions.loc[
-        collisions['_id'].isin(filled_district['_id_left']),
-        'DISTRICT'
-    ] = filled_district['DISTRICT_right'].values
-
-    return collisions
-
-
-def fill_missing_traffctl(collisions: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Fill in missing traffic control feature."""
-    missing_traffctl = collisions.query('TRAFFCTL.isna()')
-    labelled_traffctl = collisions.query('~TRAFFCTL.isna()')
-
-    filled_traffctl = (
-        missing_traffctl
-        .sjoin_nearest(labelled_traffctl, how='left')
-        .drop_duplicates(subset=['_id_left'], keep='first')
-    )
-
-    collisions.loc[
-        collisions['_id'].isin(filled_traffctl['_id_left']),
-        'TRAFFCTL'
-    ] = filled_traffctl['TRAFFCTL_right'].values
-
-    return collisions
-
-
-def fill_missing_visibility(collisions: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
-    """Fill in missing visibility feature."""
-    missing_visibility = collisions.query('VISIBILITY.isna()')
-    labelled_visibility = collisions.query('~VISIBILITY.isna()')
-
-    filled_visibility = (
-        pd.merge_asof(
-            missing_visibility,
-            labelled_visibility,
-            on='DATETIME',
-            direction='nearest',
-            tolerance=pd.Timedelta(2, 'days')
+        filled_rows = (
+            missing_rows
+            .sjoin_nearest(labelled_rows, how='left')
+            .drop_duplicates(subset=['_id_left'], keep='first')
         )
-    )
 
-    collisions.loc[
-        collisions['_id'].isin(filled_visibility['_id_x']),
-        'VISIBILITY'
-    ] = filled_visibility['VISIBILITY_y'].values
+        collisions.loc[
+            collisions['_id'].isin(filled_rows['_id_left']), feature
+        ] = filled_rows[f'{feature}_right'].values
 
     return collisions
-
 
 
 def fill_nearest_temporal(

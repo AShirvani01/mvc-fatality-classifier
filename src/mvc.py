@@ -25,9 +25,8 @@ from preprocessing import (
     filter_toronto_hospitals_with_er,
     fill_missing_road_classes,
     remove_whitespace,
-    fill_missing_district,
-    fill_missing_traffctl,
-    fill_nearest_temporal
+    fill_nearest_temporal,
+    fill_nearest_spatial
 )
 from visualize import plot_map
 
@@ -59,11 +58,8 @@ streets = load_external_data(STREETS_PATH).query('CSDNAME_L == "Toronto"')
 gdf = fill_missing_road_classes(gdf, streets)
 
 
-# Fill in missing Districts
-gdf = fill_missing_district(gdf)
-
-# Fill in missing TRAFFCTL
-gdf = fill_missing_traffctl(gdf)
+# Fill in missing Districts, Traffic Control, 
+gdf = fill_nearest_spatial(gdf, ['DISTRICT', 'TRAFFCTL'])
 
 # Fill in missing VISIBILITY
 gdf = fill_nearest_temporal(gdf, ['VISIBILITY'])
