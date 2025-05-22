@@ -26,7 +26,8 @@ from preprocessing import (
     fill_missing_road_classes,
     remove_whitespace,
     fill_missing_district,
-    fill_missing_traffctl
+    fill_missing_traffctl,
+    fill_missing_visibility
 )
 from visualize import plot_map
 
@@ -64,20 +65,6 @@ gdf = fill_missing_district(gdf)
 # Fill in missing TRAFFCTL
 gdf = fill_missing_traffctl(gdf)
 
-
 # Fill in missing VISIBILITY
-missing_visibility = df.query('VISIBILITY.isna()')
-plot_map([missing_visibility])
-
-filled_visibility = (
-                        pd.merge_asof(missing_visibility,
-                                      df.query('~VISIBILITY.isna()'),
-                                      on='DATETIME',
-                                      direction='nearest',
-                                      tolerance=pd.Timedelta(1,'hr'))
-    )
-
-plot_map([df.loc[df['_id'].isin(filled_visibility['_id_y'])], missing_visibility], ['green','red'])
-
-df.loc[df['_id'].isin(filled_visibility['_id_x']), 'VISIBILITY'] = filled_visibility['VISIBILITY_y']
+gdf = fill_missing_visibility(gdf)
 

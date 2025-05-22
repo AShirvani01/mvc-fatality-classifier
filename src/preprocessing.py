@@ -215,3 +215,26 @@ def fill_missing_traffctl(collisions: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
     ] = filled_traffctl['TRAFFCTL_right']
 
     return collisions
+
+
+def fill_missing_visibility(collisions: gpd.GeoDataFrame) -> gpd.GeoDataFrame:
+    """Fill in missing visibility feature."""
+    missing_visibility = collisions.query('VISIBILITY.isna()')
+    labelled_visibility = collisions.query('~VISIBILITY.isna()')
+
+    filled_visibility = (
+        pd.merge_asof(
+            missing_visibility,
+            labelled_visibility,
+            on='DATETIME',
+            direction='nearest',
+            tolerance=pd.Timedelta(1, 'hr')
+        )
+    )
+
+    collisions.loc[
+        collisions['_id'].isin(filled_visibility['_id_x']),
+        'VISIBILITY'
+    ] = filled_visibility['VISIBILITY_y']
+
+    return collisions
