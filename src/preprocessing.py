@@ -169,12 +169,36 @@ def fill_missing_road_classes(
     return collisions
 
 
-def remove_whitespace(collisions: pd.DataFrame) -> pd.DataFrame:
-    """Remove leading and trailing whitespace in collisions Dataframe."""
-    for feature in collisions.columns:
-        collisions[feature] = collisions[feature].apply(
-            lambda x: x.strip() if isinstance(x, str) else x
-        )
+def remove_whitespace(
+    collisions: pd.DataFrame,
+    columns: list[str] = None,
+    remove_all: bool = False
+) -> pd.DataFrame:
+    """Remove whitespace in specified columns of collisions Dataframe.
+
+    Args:
+        collisions: Dataframe of the collision data.
+        columns: columns from collisions to apply the transformation. If no
+            columns are specified, apply transformation to all columns.
+        remove_all: Remove all whitespace if true, else, remove leading and
+            trailing whitespace only.
+
+    Returns:
+        The input collisions Dataframe with the removed whitespace.
+    """
+
+    if columns is None:
+        columns = collisions.columns
+
+    for feature in columns:
+        if remove_all:
+            collisions[feature] = collisions[feature].apply(
+                lambda x: x.replace(' ', '') if isinstance(x, str) else x
+            )
+        else:
+            collisions[feature] = collisions[feature].apply(
+                lambda x: x.strip() if isinstance(x, str) else x
+            )
 
     return collisions
 
@@ -243,3 +267,7 @@ def fill_nearest_temporal(
         ] = filled_rows[f'{feature}_y'].values
 
     return collisions
+
+
+
+
