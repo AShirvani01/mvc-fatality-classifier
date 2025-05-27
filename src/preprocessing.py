@@ -269,5 +269,30 @@ def fill_nearest_temporal(
     return collisions
 
 
+def group_collisions(
+        collisions: pd.DataFrame,
+        by: list[str] = ['DATETIME', 'geometry', 'ACCNUM'],
+        as_index: bool = False
+) -> pd.api.typing.DataFrameGroupBy:
+    """Group collisions by time, place, and accident number.
+
+    Args:
+        collisions: Dataframe of the collision data with DATETIME feature.
+        by (list[str]): features to group by.
+        as_index (bool): return object with group labels as index.
+
+    Returns:
+        pd.api.typing.DataFrameGroupBy: groupby object that contains
+            information about the group.
+    """
+    grouped_collisions = collisions.groupby(
+        by=by,
+        dropna=False,
+        as_index=as_index
+    )
+
+    return grouped_collisions
+
+
 
 
