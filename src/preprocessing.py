@@ -306,5 +306,35 @@ def num_persons_feature(
     return grouped_collisions
 
 
+def long_to_wide_invage(
+    collisions: pd.DataFrame,
+    grouped_collisions: pd.DataFrame
+) -> pd.DataFrame:
+    """Convert Involved Ages feature from long to wide format.
 
+    Args:
+        collisions: Dataframe of the collision data.
+        grouped_collisions: Dataframe of the collision data grouped by Accident
+            Number.
+
+    Returns:
+        pd.DataFrame: Input Dataframe with Involved Ages feature in wide format.
+    """
+
+    wide_counts = (
+        group_collisions(collisions,
+                         by=['DATETIME', 'geometry', 'ACCNUM', 'INVAGE'],
+                         as_index=True)
+        .size()
+        .unstack(fill_value=0)
+    )
+
+    # Merge counts with main dataframe
+    merged_collisions = pd.merge(
+        grouped_collisions.drop(columns=['INVAGE']),
+        wide_counts,
+        on=['DATETIME', 'geometry', 'ACCNUM']
+    )
+
+    return merged_collisions
 
