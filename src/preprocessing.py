@@ -294,44 +294,46 @@ def group_collisions(
     return grouped_collisions
 
 
-def num_persons_feature(
+
+
+def long_to_wide(
     collisions: pd.DataFrame,
-    grouped_collisions: pd.DataFrame
+    grouped_collisions: pd.DataFrame,
+    feature: str,
+    as_count: bool = True,
+    dropna: bool = False
 ) -> pd.DataFrame:
-    """Create feature for number of persons involved in collision"""
-    count = group_collisions(collisions).size()
-
-    grouped_collisions['NUMPERSONS'] = count['size']
-    
-    return grouped_collisions
-
-
-def long_to_wide_invage(
-    collisions: pd.DataFrame,
-    grouped_collisions: pd.DataFrame
-) -> pd.DataFrame:
-    """Convert Involved Ages feature from long to wide format.
+    """Convert feature from long to wide format.
 
     Args:
         collisions: Dataframe of the collision data.
-        grouped_collisions: Dataframe of the collision data grouped by Accident
-            Number.
+        grouped_collisions: Dataframe of the collision data grouped by
+            Datetime, geometry, and Accident Number.
 
     Returns:
-        pd.DataFrame: Input Dataframe with Involved Ages feature in wide format.
+        pd.DataFrame: Input grouped Dataframe with feature in wide format.
     """
+    copy = collisions.copy()
+    copy[feature] = copy[feature].apply(lambda x: f'{feature}_{x}')
 
     wide_counts = (
-        group_collisions(collisions,
-                         by=['DATETIME', 'geometry', 'ACCNUM', 'INVAGE'],
-                         as_index=True)
+        group_collisions(
+            copy,
+            by=['DATETIME', 'geometry', 'ACCNUM', feature],
+            as_index=True)
         .size()
         .unstack(fill_value=0)
     )
 
+    if not as_count:
+        wide_counts = wide_counts > 0
+
+    if dropna:
+        wide_counts = wide_counts.drop(columns=[f'{feature}_nan'])
+
     # Merge counts with main dataframe
     merged_collisions = pd.merge(
-        grouped_collisions.drop(columns=['INVAGE']),
+        grouped_collisions.drop(columns=[feature]),
         wide_counts,
         on=['DATETIME', 'geometry', 'ACCNUM']
     )
