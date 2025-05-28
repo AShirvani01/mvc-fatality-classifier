@@ -294,6 +294,16 @@ def group_collisions(
     return grouped_collisions
 
 
+def num_persons_feature(
+    collisions: pd.DataFrame,
+    grouped_collisions: pd.DataFrame
+) -> pd.DataFrame:
+    """Create feature for number of persons involved in collision"""
+    count = group_collisions(collisions).size()
+
+    grouped_collisions['NUMPERSONS'] = count['size']
+
+    return grouped_collisions
 
 
 def long_to_wide(
