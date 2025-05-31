@@ -285,7 +285,7 @@ def group_collisions(
         pd.api.typing.DataFrameGroupBy: groupby object that contains
             information about the group.
     """
-    grouped_collisions = collisions.groupby(
+    grouped_collisions = collisions.copy().groupby(
         by=by,
         dropna=False,
         as_index=as_index
