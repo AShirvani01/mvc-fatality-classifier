@@ -64,7 +64,7 @@ class MVCFatClassPipeline:
         )
 
     def _prep_data(self):
-        
+
         collisions = self.collisions
 
         collisions = remove_whitespace(collisions)
@@ -85,23 +85,22 @@ class MVCFatClassPipeline:
             'Non-Fatal Injury',
             collisions['ACCLASS']
         )
-        collisions = collisions.query('~ACCLASS.isna()')
 
-        # Group collisions
+        # Fill ACCLASS
         grouped_collisions = group_collisions(collisions)
-
-        condlist = [
-            grouped_collisions['ACCLASS'].transform(lambda x: x.isna())
-            & grouped_collisions['INJURY'].transform(lambda x: x.eq('Fatal').any()),
-            grouped_collisions['ACCLASS'].transform(lambda x: x.isna())
-            & grouped_collisions['INJURY'].transform(lambda x: x.notna().all())
-        ]
+        na_acclass = grouped_collisions['ACCLASS'].transform(lambda x: x.isna())
+        atleast_1_fatal_injury = grouped_collisions['INJURY'].transform(lambda x: x.eq('Fatal').any())
+        no_na_injury = grouped_collisions['INJURY'].transform(lambda x: x.notna().all())
 
         collisions['ACCLASS'] = np.select(
-            condlist,
+            condlist=[na_acclass & atleast_1_fatal_injury,
+                      na_acclass & no_na_injury],
             choicelist=['Fatal', 'Non-Fatal Injury'],
             default=None
         )
+        
+        collisions = collisions.query('~ACCLASS.isna()')
+        
 
         collisions = fill_nearest_spatial(
             collisions,
