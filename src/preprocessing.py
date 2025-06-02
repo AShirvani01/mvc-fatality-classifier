@@ -64,11 +64,12 @@ def dist_to_nearest_hospital(
                     hospitals.iloc[idx]
                     .drop(columns='geometry')
                     .reset_index(drop=True)
+                    .rename(columns={'ENGLISH_NAME': 'NEAREST_HOSPITAL'})
     )
     gdf = pd.concat(
         [
             collisions.reset_index(drop=True),
-            hospitals_nearest['ENGLISH_NAME'],
+            hospitals_nearest['NEAREST_HOSPITAL'],
             pd.Series(dist, name='DIST_TO_HOS')
         ],
         axis=1
@@ -338,7 +339,7 @@ def long_to_wide(
     if not as_count:
         wide_counts = wide_counts > 0
 
-    if dropna:
+    if dropna & (f'{feature}_nan' in wide_counts.columns):
         wide_counts = wide_counts.drop(columns=[f'{feature}_nan'])
 
     # Merge counts with main dataframe
