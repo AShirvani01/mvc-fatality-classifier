@@ -163,3 +163,29 @@ class MVCFatClassPipeline:
             y = y.map({'Fatal': 1, 'Non-Fatal Injury': 0})
         return train_test_split(X, y, test_size=test_size, random_state=seed)
 
+    def _train_model_with_catboost(self):
+        X_train, X_test, y_train, y_test = self._split_data()
+
+        train_pool = cb.Pool(
+            data=X_train,
+            label=y_train,
+            cat_features=CAT_FEATURES
+        )
+        params = {
+            'iterations': 200,
+            'depth': 6,
+            'learning_rate': 0.01,
+            'loss_function': 'Logloss',
+            'verbose': 100
+        }
+        cb_scores = cb.cv(
+            train_pool,
+            params,
+            fold_count=5,
+            early_stopping_rounds=100
+        )
+
+        self.X_test = X_test
+        self.y_test = y_test
+        self.cb_scores = cb_scores
+    
