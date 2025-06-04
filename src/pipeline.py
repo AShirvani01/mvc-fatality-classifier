@@ -156,3 +156,10 @@ class MVCFatClassPipeline:
 
         self.collisions = grouped_collisions
         
+    def _split_data(self, xgb=False, test_size=0.2, seed=42):
+        X = self.collisions.drop(columns='ACCLASS')
+        y = self.collisions['ACCLASS']
+        if xgb:
+            y = y.map({'Fatal': 1, 'Non-Fatal Injury': 0})
+        return train_test_split(X, y, test_size=test_size, random_state=seed)
+
