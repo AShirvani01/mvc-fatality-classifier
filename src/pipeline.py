@@ -189,3 +189,25 @@ class MVCFatClassPipeline:
         self.y_test = y_test
         self.cb_scores = cb_scores
     
+    def _train_model_with_xgboost(self):
+
+        X_train, X_test, y_train, y_test = self._split_data(xgb=True)
+
+        dtrain = xgb.DMatrix(X_train, label=y_train.to_numpy(), enable_categorical=True)
+        params = {
+            'max_depth': 8,
+            'learning_rate': 0.01,
+            'objective': 'binary:logistic',
+            'eval_metric': 'logloss',
+            'verbosity': 2,
+        }
+        xgb_scores = xgb.cv(
+            params,
+            dtrain,
+            num_boost_round=1000,
+            nfold=5,
+            early_stopping_rounds=100
+        )
+        self.xgb_scores = xgb_scores
+        
+        
