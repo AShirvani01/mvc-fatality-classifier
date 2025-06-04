@@ -77,7 +77,7 @@ def load_external_data(file_path: Path, crs="EPSG:4326") -> gpd.GeoDataFrame:
 def download_streets_data(output_dir: Path = DATA_DIR / "canada_streets") -> None:
     
     if (output_dir / 'canada_streets.shp').exists():
-        print(f"{output_dir}/canada_streets.shp already exists.")
+        print(f"{output_dir}\canada_streets.shp already exists.")
         return
 
     url = (
@@ -99,7 +99,7 @@ def download_hospital_data(output_dir: Path = DATA_DIR) -> None:
     file_name = 'ontario_health_services.geojson'
 
     if (output_dir / file_name).exists():
-        print(f"{output_dir}/{file_name} already exists.")
+        print(f"{output_dir}\{file_name} already exists.")
         return
 
     url = (
@@ -139,7 +139,7 @@ def download_neighbourhood_data(output_dir: Path = DATA_DIR) -> None:
     file_name = 'toronto_neighbourhoods.geojson'
 
     if (output_dir / file_name).exists():
-        print(f"{output_dir}/{file_name} already exists.")
+        print(f"{output_dir}\{file_name} already exists.")
         return
 
     gis = GIS()

@@ -2,6 +2,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import geopandas as gpd
+from sklearn.model_selection import train_test_split
+import catboost as cb
+import xgboost as xgb
 
 from data import (
     get_collision_data,
@@ -17,6 +20,7 @@ from config import (
     NEIGHBOURHOODS_PATH,
     DATA_DIR
 )
+from constants import FEATURES_TO_DROP, CAT_FEATURES
 from preprocessing import (
     filter_toronto_hospitals_with_er,
     remove_whitespace,
@@ -35,10 +39,12 @@ class MVCFatClassPipeline:
 
     def __init__(self, data_dir: Path = DATA_DIR):
         self.data_dir = data_dir
+        
         self.collisions = None
         self.hospitals = None
         self.neighbourhoods = None
         self.streets = None
+        
 
     def _fetch_data(self):
         # Collision Data
@@ -96,7 +102,7 @@ class MVCFatClassPipeline:
             condlist=[na_acclass & atleast_1_fatal_injury,
                       na_acclass & no_na_injury],
             choicelist=['Fatal', 'Non-Fatal Injury'],
-            default=None
+            default=collisions['ACCLASS']
         )
         
         collisions = collisions.query('~ACCLASS.isna()')
@@ -123,7 +129,7 @@ class MVCFatClassPipeline:
         # InvAge
         grouped_collisions = long_to_wide(collisions, grouped_collisions, 'INVAGE')
         grouped_collisions = num_persons_feature(collisions, grouped_collisions)
-        
+
         # Manoeuver
         grouped_collisions = long_to_wide(collisions, grouped_collisions, 'MANOEUVER', as_count=False, dropna=True)
 
@@ -133,5 +139,20 @@ class MVCFatClassPipeline:
 
         # Feature engineering
         grouped_collisions = dist_to_nearest_hospital(grouped_collisions, self.hospitals)
+
+        grouped_collisions = grouped_collisions.drop(columns=FEATURES_TO_DROP)
         
+        # One value columns to bool
+        cols_with_one_value = grouped_collisions.nunique().eq(1)
+        bool_cols = cols_with_one_value[cols_with_one_value].index
+        grouped_collisions[bool_cols] = grouped_collisions[bool_cols].astype(bool)
+
+        # Objects to category
+        grouped_collisions[grouped_collisions.select_dtypes(['object']).columns] = (
+            grouped_collisions
+            .select_dtypes(['object'])
+            .apply(lambda x: x.astype('category'))
+        )
+
         self.collisions = grouped_collisions
+        
