@@ -1,4 +1,4 @@
-
+from enum import Enum
 
 MUNICIPALITIES = [
     'Scarborough',
@@ -32,3 +32,49 @@ HOSPITAL_LIST = [
     'William Osler Health System - Etobicoke',
     'William Osler Health System - Civic'
 ]
+
+FEATURES_TO_DROP = [
+    'DATETIME',
+    'geometry',
+    'ACCNUM',
+    '_id',
+    'STREET1',
+    'STREET2',
+    'OFFSET',
+    'ACCLOC',
+    'INJURY',
+    'FATAL_NO',
+    'INITDIR',
+    'VEHTYPE',
+    'DRIVCOND',
+    'INVTYPE',
+    'PEDTYPE',
+    'PEDACT',
+    'PEDCOND',
+    'CYCLISTYPE',
+    'CYCACT',
+    'CYCCOND',
+    'NEIGHBOURHOOD_158',
+    'NEIGHBOURHOOD_140'
+]
+
+CAT_FEATURES = [
+    'ROAD_CLASS',
+    'DISTRICT',
+    'TRAFFCTL',
+    'VISIBILITY',
+    'LIGHT',
+    'RDSFCOND',
+    'IMPACTYPE',
+    'HOOD_158',
+    'HOOD_140',
+    'DIVISION',
+    'MONTH',
+    'DOW',
+    'NEAREST_HOSPITAL'
+    ]
+
+
+class Algorithm(Enum):
+    CATBOOST = 'CatBoost'
+    XGBOOST = 'XGBoost'

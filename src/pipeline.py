@@ -2,9 +2,12 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
 import catboost as cb
 import xgboost as xgb
+import optuna
+from typing import Callable
+
 
 from data import (
     get_collision_data,
@@ -18,9 +21,10 @@ from config import (
     HEALTH_SERVICES_PATH,
     STREETS_PATH,
     NEIGHBOURHOODS_PATH,
-    DATA_DIR
+    DATA_DIR,
+    CBModelConfig
 )
-from constants import FEATURES_TO_DROP, CAT_FEATURES
+from constants import FEATURES_TO_DROP, CAT_FEATURES, Algorithm
 from preprocessing import (
     filter_toronto_hospitals_with_er,
     remove_whitespace,
@@ -37,14 +41,17 @@ from preprocessing import (
 
 class MVCFatClassPipeline:
 
-    def __init__(self, data_dir: Path = DATA_DIR):
+    def __init__(
+        self,
+        data_dir: Path = DATA_DIR,
+        cb_model_config: CBModelConfig = CBModelConfig()
+    ):
         self.data_dir = data_dir
-        
-        self.collisions = None
-        self.hospitals = None
-        self.neighbourhoods = None
-        self.streets = None
-        
+
+        self.algorithms: dict[Algorithm, Callable] = {
+            Algorithm.CATBOOST: self._train_model_with_catboost,
+            Algorithm.XGBOOST: self._train_model_with_xgboost
+        }
 
     def _fetch_data(self):
         # Collision Data
@@ -141,7 +148,7 @@ class MVCFatClassPipeline:
         grouped_collisions = dist_to_nearest_hospital(grouped_collisions, self.hospitals)
 
         grouped_collisions = grouped_collisions.drop(columns=FEATURES_TO_DROP)
-        
+
         # One value columns to bool
         cols_with_one_value = grouped_collisions.nunique().eq(1)
         bool_cols = cols_with_one_value[cols_with_one_value].index
@@ -155,59 +162,99 @@ class MVCFatClassPipeline:
         )
 
         self.collisions = grouped_collisions
-        
-    def _split_data(self, xgb=False, test_size=0.2, seed=42):
+
+    def _split_data(self, test_size=0.2, seed=42):
         X = self.collisions.drop(columns='ACCLASS')
-        y = self.collisions['ACCLASS']
-        if xgb:
-            y = y.map({'Fatal': 1, 'Non-Fatal Injury': 0})
-        return train_test_split(X, y, test_size=test_size, random_state=seed)
+        y = self.collisions['ACCLASS'].map({'Fatal': 1, 'Non-Fatal Injury': 0})
+
+        split = train_test_split(X, y, test_size=test_size, random_state=seed)
+        self.X_train, self.X_test, self.y_train, self.y_test = split
 
     def _train_model_with_catboost(self):
-        X_train, X_test, y_train, y_test = self._split_data()
 
         train_pool = cb.Pool(
-            data=X_train,
-            label=y_train,
+            data=self.X_train,
+            label=self.y_train,
             cat_features=CAT_FEATURES
         )
-        params = {
-            'iterations': 200,
-            'depth': 6,
-            'learning_rate': 0.01,
-            'loss_function': 'Logloss',
-            'verbose': 100
-        }
-        cb_scores = cb.cv(
-            train_pool,
-            params,
-            fold_count=5,
-            early_stopping_rounds=100
-        )
 
-        self.X_test = X_test
-        self.y_test = y_test
-        self.cb_scores = cb_scores
-    
+        study = optuna.create_study(direction='minimize')
+        study.optimize(
+            lambda trial: self._cb_objective(trial, train_pool),
+            n_trials=1
+        )
+        self.df = study.trials_dataframe(attrs=('number', 'value', 'params', 'state'))
+        self.best_params = study.best_params
+        self.best_value = study.best_value
+
     def _train_model_with_xgboost(self):
 
-        X_train, X_test, y_train, y_test = self._split_data(xgb=True)
-
-        dtrain = xgb.DMatrix(X_train, label=y_train.to_numpy(), enable_categorical=True)
-        params = {
-            'max_depth': 8,
-            'learning_rate': 0.01,
-            'objective': 'binary:logistic',
-            'eval_metric': 'logloss',
-            'verbosity': 2,
-        }
-        xgb_scores = xgb.cv(
-            params,
-            dtrain,
-            num_boost_round=1000,
-            nfold=5,
-            early_stopping_rounds=100
+        dtrain = xgb.DMatrix(
+            data=self.X_train,
+            label=self.y_train.to_numpy(),
+            enable_categorical=True
         )
-        self.xgb_scores = xgb_scores
-        
-        
+
+        study = optuna.create_study(direction='minimize')
+        study.optimize(
+            lambda trial: self._xgb_objective(trial, dtrain),
+            n_trials=1
+        )
+        self.df = study.trials_dataframe(attrs=('number', 'value', 'params', 'state'))
+        self.best_params = study.best_params
+        self.best_value = study.best_value
+
+    def _xgb_objective(self, trial, dtrain):
+
+        param = {
+            'eval_metric': trial.suggest_categorical('eval_metric', ['logloss']),
+            'depth': trial.suggest_int('depth', 4, 10),
+            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1)
+        }
+
+        model_results = xgb.cv(
+            param,
+            dtrain,
+            early_stopping_rounds=100,
+            nfold=5,
+            seed=42,
+            verbose_eval=0
+        )
+
+        return np.min(model_results[f'test-{param["eval_metric"]}-mean'])
+
+    def _cb_objective(self, trial, train_pool):
+
+        params = {
+            'objective': trial.suggest_categorical('objective', ['Logloss']),
+            'depth': trial.suggest_int('depth', 4, 10),
+            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1)
+        }
+
+        model_results = cb.cv(
+            train_pool,
+            params,
+            early_stopping_rounds=100,
+            fold_count=5,
+            seed=42,
+            verbose=0)
+
+        return np.min(model_results[f'test-{params["objective"]}-mean'])
+
+    def _train_model(self, algorithm):
+
+        if (train_func := self.algorithms.get(algorithm)):
+            train_func()
+        else:
+            raise ValueError(f'Unsupported algorithm: {algorithm}')
+
+    def run_training(self, algorithm: Algorithm):
+
+        self._fetch_data()
+        self._prep_data()
+        self._split_data()
+        self._train_model(algorithm)
+
+
+pipeline = MVCFatClassPipeline()
+pipeline.run_training(Algorithm.XGBOOST)
