@@ -22,7 +22,8 @@ from config import (
     STREETS_PATH,
     NEIGHBOURHOODS_PATH,
     DATA_DIR,
-    CBModelConfig
+    CBModelConfig,
+    CBParams
 )
 from constants import FEATURES_TO_DROP, CAT_FEATURES, Algorithm
 from preprocessing import (
@@ -44,9 +45,12 @@ class MVCFatClassPipeline:
     def __init__(
         self,
         data_dir: Path = DATA_DIR,
-        cb_model_config: CBModelConfig = CBModelConfig()
+        cb_model_config: CBModelConfig = CBModelConfig(),
+        cb_params: CBParams = CBParams()
     ):
         self.data_dir = data_dir
+        self.cb_model_config = cb_model_config
+        self.cb_params = cb_params
 
         self.algorithms: dict[Algorithm, Callable] = {
             Algorithm.CATBOOST: self._train_model_with_catboost,
@@ -181,11 +185,37 @@ class MVCFatClassPipeline:
         study = optuna.create_study(direction='minimize')
         study.optimize(
             lambda trial: self._cb_objective(trial, train_pool),
-            n_trials=1
+            n_trials=2
         )
-        self.df = study.trials_dataframe(attrs=('number', 'value', 'params', 'state'))
+
+        self.df = study.trials_dataframe()
         self.best_params = study.best_params
         self.best_value = study.best_value
+
+    def _cb_objective(self, trial: optuna.Trial, train_pool: cb.Pool):
+
+        params = {}
+
+        for param, value in self.cb_params.model_dump().items():
+            if type(value) is list:
+                distribution = trial.suggest_categorical(param, value)
+            elif type(value) is tuple:
+                if type(value[0]) is float:
+                    distribution = trial.suggest_float(param, *value)
+                else:
+                    distribution = trial.suggest_int(param, *value)
+            else:
+                distribution = value
+
+            params[param] = distribution
+
+        model_results = cb.cv(
+            train_pool,
+            params,
+            **self.cb_model_config.model_dump()
+        )
+
+        return np.min(model_results[f'test-{params["objective"]}-mean'])
 
     def _train_model_with_xgboost(self):
 
@@ -200,7 +230,7 @@ class MVCFatClassPipeline:
             lambda trial: self._xgb_objective(trial, dtrain),
             n_trials=1
         )
-        self.df = study.trials_dataframe(attrs=('number', 'value', 'params', 'state'))
+        self.df = study.trials_dataframe()
         self.best_params = study.best_params
         self.best_value = study.best_value
 
@@ -223,24 +253,6 @@ class MVCFatClassPipeline:
 
         return np.min(model_results[f'test-{param["eval_metric"]}-mean'])
 
-    def _cb_objective(self, trial, train_pool):
-
-        params = {
-            'objective': trial.suggest_categorical('objective', ['Logloss']),
-            'depth': trial.suggest_int('depth', 4, 10),
-            'learning_rate': trial.suggest_float('learning_rate', 0.01, 0.1)
-        }
-
-        model_results = cb.cv(
-            train_pool,
-            params,
-            early_stopping_rounds=100,
-            fold_count=5,
-            seed=42,
-            verbose=0)
-
-        return np.min(model_results[f'test-{params["objective"]}-mean'])
-
     def _train_model(self, algorithm):
 
         if (train_func := self.algorithms.get(algorithm)):
@@ -257,4 +269,4 @@ class MVCFatClassPipeline:
 
 
 pipeline = MVCFatClassPipeline()
-pipeline.run_training(Algorithm.XGBOOST)
+pipeline.run_training(Algorithm.CATBOOST)

@@ -72,7 +72,7 @@ CAT_FEATURES = [
     'MONTH',
     'DOW',
     'NEAREST_HOSPITAL'
-    ]
+]
 
 
 class Algorithm(Enum):
