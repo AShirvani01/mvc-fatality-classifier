@@ -49,7 +49,7 @@ class CBParams(BaseModel):
     eval_metric: EvalMetric | list[EvalMetric] = 'Accuracy'
     auto_class_weights: AutoClassWeights | list[AutoClassWeights] = 'Balanced'
     depth: Depth | tuple[Depth, Depth] | list[Depth] = (1, 16)
-    l2_leaf_reg: L2LeafReg | tuple[L2LeafReg, L2LeafReg] | list[L2LeafReg] = (100., 0.)
+    l2_leaf_reg: L2LeafReg | tuple[L2LeafReg, L2LeafReg] | list[L2LeafReg] = (0., 100.)
     learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.01, 0.1)
     rsm: RSM | tuple[RSM, RSM] | list[RSM] = (0.1, 1)
 
@@ -60,7 +60,7 @@ class CBModelConfig(BaseModel):
     """CatBoost Model configuration.
 
     Args:
-        early_stopping_round (int): If provided, stop training if one
+        early_stopping_rounds (int): If provided, stop training if one
             metric of one validation data doesn't improve in the last
             `early_stopping_round` rounds. Defaults to 100.
         fold_count (int): Number of different cross validation folds to train.
@@ -70,6 +70,7 @@ class CBModelConfig(BaseModel):
         verbose (Union[bool, int]): show log for training. Defaults to 100.
     """
 
+    params: CBParams = CBParams()
     early_stopping_rounds: int = 100
     fold_count: int = 5
     num_boost_round: int = 10_000
@@ -102,11 +103,35 @@ class XGBParams(BaseModel):
     SubSample: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
 
     # Params/Defining defaults
-    objective: Objective | list[Objective] = 'Logloss'
-    eval_metric: EvalMetric | list[EvalMetric] = 'Accuracy'
+    objective: Objective | list[Objective] = 'binary:logistic'
+    eval_metric: EvalMetric | list[EvalMetric] = 'error'
     max_depth: MaxDepth | tuple[MaxDepth, MaxDepth] | list[MaxDepth] = (1, 16)
     reg_lambda: RegLambda | tuple[RegLambda, RegLambda] | list[RegLambda] = (0., 100.)
     learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.01, 0.1)
     subsample: SubSample | tuple[SubSample, SubSample] | list[SubSample] = (0.1, 1)
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class XGBModelConfig(BaseModel):
+    """XGBoost Model configuration.
+
+    Args:
+        early_stopping_rounds (int): If provided, stop training if one
+            metric of one validation data doesn't improve in the last
+            `early_stopping_round` rounds. Defaults to 100.
+        nfold (int): Number of different cross validation folds to train.
+            Defaults to 5.
+        num_boost_round (int): Number of boosting iterations. Defaults to 10000.
+        seed (int): The random seed used for training. Defaults to 42.
+        verbosity (Union[bool, int]): show log for training. Defaults to 100.
+    """
+
+    params: XGBParams = XGBParams()
+    early_stopping_rounds: int = 100
+    nfold: int = 5
+    num_boost_round: int = 10_000
+    seed: int = 42
+    verbose_eval: Union[bool, int] = False
 
     model_config = ConfigDict(extra='forbid')
