@@ -23,9 +23,7 @@ from config import (
     NEIGHBOURHOODS_PATH,
     DATA_DIR,
     CBModelConfig,
-    CBParams,
-    XGBModelConfig,
-    XGBParams
+    XGBModelConfig
 )
 from constants import FEATURES_TO_DROP, CAT_FEATURES, Algorithm
 from preprocessing import (
@@ -97,6 +95,10 @@ class MVCFatClassPipeline:
             collisions['MANOEUVER']
         )
         collisions = fill_missing_road_classes(collisions, self.streets)
+        collisions['ROAD_CLASS'] = np.where(
+            collisions['ROAD_CLASS'].isin(['Laneway', 'Major Shoreline']),
+            'Other',
+            collisions['ROAD_CLASS'])
 
         # Response
         collisions['ACCLASS'] = np.where(
@@ -168,6 +170,12 @@ class MVCFatClassPipeline:
         )
 
         self.collisions = grouped_collisions
+
+    def _to_disk(self, save_path: Path, overwrite: bool):
+        if (save_path / 'processed_data.csv').exists() and not overwrite:
+            print('processed_data.csv already exists and overwrite is set to False.')
+            return
+        self.collisions.to_csv(save_path / 'processed_data.csv', index=False)
 
     def _split_data(self, test_size=0.2, seed=42):
         X = self.collisions.drop(columns='ACCLASS')
@@ -268,10 +276,18 @@ class MVCFatClassPipeline:
         else:
             raise ValueError(f'Unsupported algorithm: {algorithm}')
 
-    def run_training(self, algorithm: Algorithm):
+    def run_training(
+            self,
+            algorithm: Algorithm,
+            save_data: bool = True,
+            save_path: Path = DATA_DIR,
+            overwrite: bool = False
+    ):
 
         self._fetch_data()
         self._prep_data()
+        if save_data:
+            self._to_disk(save_path, overwrite)
         self._split_data()
         self._train_model(algorithm)
 
