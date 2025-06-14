@@ -2,7 +2,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from sklearn.model_selection import train_test_split, GridSearchCV, StratifiedKFold
+from sklearn.model_selection import train_test_split
 import catboost as cb
 import xgboost as xgb
 import optuna
@@ -192,15 +192,25 @@ class MVCFatClassPipeline:
             cat_features=CAT_FEATURES
         )
 
+        # Tune hyperparameters
         study = optuna.create_study(direction='minimize')
         study.optimize(
             lambda trial: self._cb_objective(trial, train_pool),
             n_trials=1
         )
 
-        self.df = study.trials_dataframe()
-        self.best_params = study.best_params
-        self.best_value = study.best_value
+        # Fit model with best hyperparameters
+        best_params = study.best_trial.user_attrs['full_params']
+        best_model = cb.CatBoostClassifier(**best_params)
+        best_model.fit(train_pool)
+        self.best_model = best_model
+        self.feature_importance = pd.DataFrame(
+            data=best_model.get_feature_importance(),
+            index=self.X_train.columns
+        )
+
+        # Save model
+        best_model.save_model()
 
     def _cb_objective(self, trial: optuna.Trial, train_pool: cb.Pool):
 
@@ -219,13 +229,19 @@ class MVCFatClassPipeline:
 
             params[param] = distribution
 
-        model_results = cb.cv(
+        cv_results = cb.cv(
             train_pool,
             params,
             **self.cb_model_config.model_dump(exclude='params')
         )
 
-        return np.min(model_results[f'test-{params["eval_metric"]}-mean'])
+        cv_scores = cv_results[f'test-{params["eval_metric"]}-mean']
+
+        # Add optimal iterations to params
+        params['iterations'] = cv_results['iterations'].max()
+        trial.set_user_attr('full_params', params)
+
+        return np.min(cv_scores)
 
     def _train_model_with_xgboost(self):
 
@@ -235,14 +251,22 @@ class MVCFatClassPipeline:
             enable_categorical=True
         )
 
+        # Tune hyperparameters
         study = optuna.create_study(direction='minimize')
         study.optimize(
             lambda trial: self._xgb_objective(trial, dtrain),
             n_trials=1
         )
-        self.df = study.trials_dataframe()
-        self.best_params = study.best_params
-        self.best_value = study.best_value
+
+        # Fit model with best hyperparameters
+        best_params = study.best_trial.user_attrs['full_params']
+        best_model = xgb.XGBClassifier(**best_params)
+        best_model.fit(dtrain.get_data(), dtrain.get_label())
+        self.best_model = best_model
+        self.feature_importance = pd.DataFrame(
+            data=best_model.feature_importances_,
+            index=self.X_train.columns
+        )
 
     def _xgb_objective(self, trial, dtrain):
 
@@ -261,13 +285,19 @@ class MVCFatClassPipeline:
 
             param[key] = distribution
 
-        model_results = xgb.cv(
+        cv_results = xgb.cv(
             param,
             dtrain,
             **self.xgb_model_config.model_dump(exclude='params')
         )
 
-        return np.min(model_results[f'test-{param["eval_metric"]}-mean'])
+        cv_scores = cv_results[f'test-{param["eval_metric"]}-mean']
+        
+        # Add optimal iterations to params
+        param['num_boost_round'] = cv_scores.idxmin() + 1
+        trial.set_user_attr('full_params', param)
+
+        return np.min(cv_scores)
 
     def _train_model(self, algorithm):
 

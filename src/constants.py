@@ -54,8 +54,10 @@ FEATURES_TO_DROP = [
     'CYCLISTYPE',
     'CYCACT',
     'CYCCOND',
-    'NEIGHBOURHOOD_158',
-    'NEIGHBOURHOOD_140'
+    'HOOD_158',
+    'HOOD_140',
+    'NEIGHBOURHOOD_140',
+    'DIVISION'
 ]
 
 CAT_FEATURES = [
@@ -66,9 +68,7 @@ CAT_FEATURES = [
     'LIGHT',
     'RDSFCOND',
     'IMPACTYPE',
-    'HOOD_158',
-    'HOOD_140',
-    'DIVISION',
+    'NEIGHBOURHOOD_158',
     'MONTH',
     'DOW',
     'NEAREST_HOSPITAL'
