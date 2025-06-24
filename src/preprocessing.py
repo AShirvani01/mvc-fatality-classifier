@@ -31,9 +31,16 @@ def encode_datetime(df: pd.DataFrame) -> pd.DataFrame:
         )
 
         df['YEAR'] = df['DATETIME'].dt.year
-        df['MONTH'] = df['DATETIME'].dt.month_name()
-        df['DOW'] = df['DATETIME'].dt.day_name()
-        df['HOUR'] = df['DATETIME'].dt.hour
+
+        cyclical_features = {
+            'MONTH': [df['DATETIME'].dt.month - 1, 12],
+            'DOW': [df['DATETIME'].dt.day_of_week, 7],
+            'HOUR': [df['DATETIME'].dt.hour, 24]
+        }
+
+        for feature, (values, period) in cyclical_features.items():
+            df[f'{feature}_sin'] = np.sin(2 * np.pi * values / period)
+            df[f'{feature}_cos'] = np.cos(2 * np.pi * values / period)
 
         df = df.drop(columns=['TIME', 'DATE'], axis=1)
 
