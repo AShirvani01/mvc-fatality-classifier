@@ -69,8 +69,6 @@ CAT_FEATURES = [
     'RDSFCOND',
     'IMPACTYPE',
     'NEIGHBOURHOOD_158',
-    'MONTH',
-    'DOW',
     'NEAREST_HOSPITAL'
 ]
 
