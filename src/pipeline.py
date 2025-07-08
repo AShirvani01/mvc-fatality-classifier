@@ -22,6 +22,7 @@ from config import (
     STREETS_PATH,
     NEIGHBOURHOODS_PATH,
     DATA_DIR,
+    MODEL_DIR,
     CBModelConfig,
     XGBModelConfig
 )
@@ -46,21 +47,25 @@ class MVCFatClassPipeline:
         self,
         data_dir: Path = DATA_DIR,
         cb_model_config: CBModelConfig = CBModelConfig(),
-        xgb_model_config: XGBModelConfig = XGBModelConfig()
+        xgb_model_config: XGBModelConfig = XGBModelConfig(),
+        model_dir: Path = MODEL_DIR
     ):
         self.data_dir = data_dir
         self.cb_model_config = cb_model_config
         self.xgb_model_config = xgb_model_config
+        self.model_dir = model_dir
 
         self.algorithms: dict[Algorithm, Callable] = {
             Algorithm.CATBOOST: self._train_model_with_catboost,
             Algorithm.XGBOOST: self._train_model_with_xgboost
         }
 
+        model_dir.mkdir(exist_ok=True)
+
     def _fetch_data(self):
         # Collision Data
         raw_collision_data = get_collision_data()
-        self.collisions = convert_to_geodata(raw_collision_data)
+        self.raw_collisions = convert_to_geodata(raw_collision_data)
 
         # Hospital Data
         download_hospital_data(self.data_dir)
@@ -80,12 +85,16 @@ class MVCFatClassPipeline:
             .query('CSDNAME_L == "Toronto"')
         )
 
-    def _prep_data(self):
+    def _prep_data(self, drop_features=True):
 
-        collisions = self.collisions
+        collisions = self.raw_collisions
 
+        collisions = collisions.query('NEIGHBOURHOOD_158!="NSA"')
         collisions = remove_whitespace(collisions)
         collisions = encode_datetime(collisions)
+        collisions['INVAGE'] = collisions['INVAGE'].replace(
+            ['0 to 4', '5 to 9'], ['00 to 04', '05 to 09']
+        )
 
         # Filling missing/dropping rare classes in features
         collisions['IMPACTYPE'] = collisions['IMPACTYPE'].fillna('Unknown')
@@ -99,6 +108,33 @@ class MVCFatClassPipeline:
             collisions['ROAD_CLASS'].isin(['Laneway', 'Major Shoreline']),
             'Other',
             collisions['ROAD_CLASS'])
+
+        collisions['TRAFFCTL'] = np.where(
+            collisions['TRAFFCTL'].isin(
+                ['Yield Sign', 'Streetcar (Stop for)', 'Traffic Gate',
+                 'School Guard', 'Police Control', 'Traffic Controller']),
+            'Other',
+            collisions['TRAFFCTL'])
+
+        collisions['VISIBILITY'] = np.where(
+            collisions['VISIBILITY'].isin(
+                ['Fog, Mist, Smoke, Dust', 'Freezing Rain', 'Drifting Snow',
+                 'Strong wind']),
+            'Other',
+            collisions['VISIBILITY'])
+
+        collisions['LIGHT'] = np.where(
+            ~collisions['LIGHT'].isin(
+                ['Daylight', 'Dark, artificial', 'Dark']),
+            'Other',
+            collisions['LIGHT'])
+
+        collisions['RDSFCOND'] = np.where(
+            ~collisions['RDSFCOND'].isin(
+                ['Dry', 'Wet']),
+            'Other',
+            collisions['RDSFCOND'])
+        
 
         # Response
         collisions['ACCLASS'] = np.where(
@@ -152,10 +188,11 @@ class MVCFatClassPipeline:
         grouped_collisions['DRIVACT'] = grouped_collisions['DRIVACT'].fillna('Unknown')
         grouped_collisions = long_to_wide(collisions, grouped_collisions, 'DRIVACT', as_count=False, dropna=True)
 
-        # Feature engineering
+        # Hospitals
         grouped_collisions = dist_to_nearest_hospital(grouped_collisions, self.hospitals)
 
-        grouped_collisions = grouped_collisions.drop(columns=FEATURES_TO_DROP)
+        if drop_features:
+            grouped_collisions = grouped_collisions.drop(columns=FEATURES_TO_DROP)
 
         # One value columns to bool
         cols_with_one_value = grouped_collisions.nunique().eq(1)
@@ -181,7 +218,8 @@ class MVCFatClassPipeline:
         X = self.collisions.drop(columns='ACCLASS')
         y = self.collisions['ACCLASS'].map({'Fatal': 1, 'Non-Fatal Injury': 0})
 
-        split = train_test_split(X, y, test_size=test_size, random_state=seed)
+        split = train_test_split(X, y, test_size=test_size, random_state=seed,
+                                 stratify=y)
         self.X_train, self.X_test, self.y_train, self.y_test = split
 
     def _train_model_with_catboost(self):
@@ -201,16 +239,13 @@ class MVCFatClassPipeline:
 
         # Fit model with best hyperparameters
         best_params = study.best_trial.user_attrs['full_params']
-        best_model = cb.CatBoostClassifier(**best_params)
+        best_model = cb.CatBoostClassifier(**best_params, verbose=False)
         best_model.fit(train_pool)
-        self.best_model = best_model
+        self.model = best_model
         self.feature_importance = pd.DataFrame(
             data=best_model.get_feature_importance(),
             index=self.X_train.columns
         )
-
-        # Save model
-        best_model.save_model()
 
     def _cb_objective(self, trial: optuna.Trial, train_pool: cb.Pool):
 
@@ -255,18 +290,20 @@ class MVCFatClassPipeline:
         study = optuna.create_study(direction='minimize')
         study.optimize(
             lambda trial: self._xgb_objective(trial, dtrain),
-            n_trials=1
+            n_trials=10
         )
 
         # Fit model with best hyperparameters
         best_params = study.best_trial.user_attrs['full_params']
         best_model = xgb.XGBClassifier(**best_params)
         best_model.fit(dtrain.get_data(), dtrain.get_label())
-        self.best_model = best_model
+        self.model = best_model
         self.feature_importance = pd.DataFrame(
             data=best_model.feature_importances_,
             index=self.X_train.columns
         )
+
+        best_model.save_model(self.model_dir / 'xgboost_model.json')
 
     def _xgb_objective(self, trial, dtrain):
 
@@ -292,9 +329,9 @@ class MVCFatClassPipeline:
         )
 
         cv_scores = cv_results[f'test-{param["eval_metric"]}-mean']
-        
+
         # Add optimal iterations to params
-        param['num_boost_round'] = cv_scores.idxmin() + 1
+        param['n_estimators'] = cv_scores.idxmin() + 1
         trial.set_user_attr('full_params', param)
 
         return np.min(cv_scores)
@@ -321,6 +358,16 @@ class MVCFatClassPipeline:
         self._split_data()
         self._train_model(algorithm)
 
+    def _load_model(self, filepath: Path):
+        model = xgb.XGBClassifier()
+        model.load_model(filepath)
+        self.model = model
 
-pipeline = MVCFatClassPipeline()
-pipeline.run_training(Algorithm.XGBOOST)
+    def predict(self):
+        y_pred = self.model.predict(self.X_test)
+        accuracy = np.mean(y_pred == self.y_test)
+        return round(accuracy, 3)
+
+
+if __name__ == '__main__':
+    pipeline = MVCFatClassPipeline()
