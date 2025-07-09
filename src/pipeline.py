@@ -2,7 +2,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import geopandas as gpd
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, cross_val_score
+from sklearn.metrics import classification_report
 import catboost as cb
 import xgboost as xgb
 import optuna
@@ -247,11 +248,10 @@ class MVCFatClassPipeline:
             index=self.X_train.columns
         )
 
-    def _cb_objective(self, trial: optuna.Trial, train_pool: cb.Pool):
-
+    def _unpack_params(self, trial: optuna.Trial, config):
         params = {}
 
-        for param, value in self.cb_model_config.params.model_dump().items():
+        for param, value in config.params.model_dump().items():
             if type(value) is list:
                 distribution = trial.suggest_categorical(param, value)
             elif type(value) is tuple:
@@ -263,6 +263,12 @@ class MVCFatClassPipeline:
                 distribution = value
 
             params[param] = distribution
+
+        return params
+
+    def _cb_objective(self, trial: optuna.Trial, train_pool: cb.Pool):
+
+        params = self._unpack_params(trial, self.cb_model_config)
 
         cv_results = cb.cv(
             train_pool,
@@ -307,20 +313,7 @@ class MVCFatClassPipeline:
 
     def _xgb_objective(self, trial, dtrain):
 
-        param = {}
-
-        for key, value in self.xgb_model_config.params.model_dump().items():
-            if type(value) is list:
-                distribution = trial.suggest_categorical(key, value)
-            elif type(value) is tuple:
-                if type(value[0]) is float:
-                    distribution = trial.suggest_float(key, *value)
-                else:
-                    distribution = trial.suggest_int(key, *value)
-            else:
-                distribution = value
-
-            param[key] = distribution
+        param = self._unpack_params(trial, self.xgb_model_config)
 
         cv_results = xgb.cv(
             param,
