@@ -1,5 +1,5 @@
-from loss_functions import *
-from loss_wrappers import loss_wrapper, cat_wrapper
+from custom_losses.loss_functions import *
+from custom_losses.loss_wrappers import loss_wrapper, cat_wrapper
 import optuna
 from constants import min_optimal_metrics, max_optimal_metrics
 

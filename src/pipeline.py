@@ -29,7 +29,7 @@ from config import (
 from constants import FEATURES_TO_DROP, CAT_FEATURES, Algorithm
 from preprocessing import *
 
-from utils import *
+from custom_losses.utils import *
 
 
 class MVCFatClassPipeline:
@@ -253,7 +253,7 @@ class MVCFatClassPipeline:
     def run_training(
             self,
             algorithm: Algorithm,
-            n_trials: int = 1,
+            n_trials: int = 30,
             save_data: bool = True,
             save_path: Path = DATA_DIR,
             overwrite: bool = False
