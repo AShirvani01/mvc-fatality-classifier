@@ -377,3 +377,22 @@ def change_dtypes(data: pd.DataFrame) -> None:
     # Response to int
     data['ACCLASS'] = data['ACCLASS'].map({'Fatal': 1, 'Non-Fatal Injury': 0})
 
+
+def fill_acclass(collisions: pd.DataFrame) -> pd.DataFrame:
+    grouped_collisions = group_collisions(collisions)
+    data = collisions.copy()
+    na_acclass = grouped_collisions['ACCLASS'].transform(lambda x: x.isna())
+    atleast_1_fatal_injury = grouped_collisions['INJURY'].transform(lambda x: x.eq('Fatal').any())
+    no_na_injury = grouped_collisions['INJURY'].transform(lambda x: x.notna().all())
+
+    data['ACCLASS'] = np.select(
+        condlist=[na_acclass & atleast_1_fatal_injury,
+                  na_acclass & no_na_injury],
+        choicelist=['Fatal', 'Non-Fatal Injury'],
+        default=data['ACCLASS']
+    )
+
+    data = data.query('~ACCLASS.isna()')
+    
+    return data
+
