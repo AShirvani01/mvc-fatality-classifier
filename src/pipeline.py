@@ -1,9 +1,8 @@
 from pathlib import Path
 import numpy as np
 import pandas as pd
-import geopandas as gpd
-from sklearn.model_selection import train_test_split, cross_val_score
-from sklearn.metrics import classification_report
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
 import catboost as cb
 import xgboost as xgb
 import optuna
@@ -28,18 +27,9 @@ from config import (
     XGBModelConfig
 )
 from constants import FEATURES_TO_DROP, CAT_FEATURES, Algorithm
-from preprocessing import (
-    filter_toronto_hospitals_with_er,
-    remove_whitespace,
-    encode_datetime,
-    group_collisions,
-    fill_nearest_spatial,
-    fill_nearest_temporal,
-    long_to_wide,
-    num_persons_feature,
-    fill_missing_road_classes,
-    dist_to_nearest_hospital
-)
+from preprocessing import *
+
+from utils import *
 
 
 class MVCFatClassPipeline:
@@ -49,12 +39,14 @@ class MVCFatClassPipeline:
         data_dir: Path = DATA_DIR,
         cb_model_config: CBModelConfig = CBModelConfig(),
         xgb_model_config: XGBModelConfig = XGBModelConfig(),
-        model_dir: Path = MODEL_DIR
+        model_dir: Path = MODEL_DIR,
+        cache_dir: Path = DATA_DIR / 'processed_data.csv'
     ):
         self.data_dir = data_dir
         self.cb_model_config = cb_model_config
         self.xgb_model_config = xgb_model_config
         self.model_dir = model_dir
+        self.cache_dir = cache_dir
 
         self.algorithms: dict[Algorithm, Callable] = {
             Algorithm.CATBOOST: self._train_model_with_catboost,
@@ -97,78 +89,11 @@ class MVCFatClassPipeline:
             ['0 to 4', '5 to 9'], ['00 to 04', '05 to 09']
         )
 
-        # Filling missing/dropping rare classes in features
-        collisions['IMPACTYPE'] = collisions['IMPACTYPE'].fillna('Unknown')
-        collisions['MANOEUVER'] = np.where(
-            collisions['MANOEUVER'] == 'Disabled',
-            np.nan,
-            collisions['MANOEUVER']
-        )
         collisions = fill_missing_road_classes(collisions, self.streets)
-        collisions['ROAD_CLASS'] = np.where(
-            collisions['ROAD_CLASS'].isin(['Laneway', 'Major Shoreline']),
-            'Other',
-            collisions['ROAD_CLASS'])
-
-        collisions['TRAFFCTL'] = np.where(
-            collisions['TRAFFCTL'].isin(
-                ['Yield Sign', 'Streetcar (Stop for)', 'Traffic Gate',
-                 'School Guard', 'Police Control', 'Traffic Controller']),
-            'Other',
-            collisions['TRAFFCTL'])
-
-        collisions['VISIBILITY'] = np.where(
-            collisions['VISIBILITY'].isin(
-                ['Fog, Mist, Smoke, Dust', 'Freezing Rain', 'Drifting Snow',
-                 'Strong wind']),
-            'Other',
-            collisions['VISIBILITY'])
-
-        collisions['LIGHT'] = np.where(
-            ~collisions['LIGHT'].isin(
-                ['Daylight', 'Dark, artificial', 'Dark']),
-            'Other',
-            collisions['LIGHT'])
-
-        collisions['RDSFCOND'] = np.where(
-            ~collisions['RDSFCOND'].isin(
-                ['Dry', 'Wet']),
-            'Other',
-            collisions['RDSFCOND'])
-        
-
-        # Response
-        collisions['ACCLASS'] = np.where(
-            collisions['ACCLASS'] == 'Property Damage O',
-            'Non-Fatal Injury',
-            collisions['ACCLASS']
-        )
-
-        # Fill ACCLASS
-        grouped_collisions = group_collisions(collisions)
-        na_acclass = grouped_collisions['ACCLASS'].transform(lambda x: x.isna())
-        atleast_1_fatal_injury = grouped_collisions['INJURY'].transform(lambda x: x.eq('Fatal').any())
-        no_na_injury = grouped_collisions['INJURY'].transform(lambda x: x.notna().all())
-
-        collisions['ACCLASS'] = np.select(
-            condlist=[na_acclass & atleast_1_fatal_injury,
-                      na_acclass & no_na_injury],
-            choicelist=['Fatal', 'Non-Fatal Injury'],
-            default=collisions['ACCLASS']
-        )
-        
-        collisions = collisions.query('~ACCLASS.isna()')
-        
-
-        collisions = fill_nearest_spatial(
-            collisions,
-            ['DISTRICT', 'TRAFFCTL']
-        )
-
-        collisions = fill_nearest_temporal(
-            collisions,
-            ['VISIBILITY', 'LIGHT', 'RDSFCOND']
-        )
+        collisions = fill_rare_classes(collisions)
+        collisions = fill_acclass(collisions)
+        collisions = fill_nearest_spatial(collisions, ['DISTRICT', 'TRAFFCTL'])
+        collisions = fill_nearest_temporal(collisions, ['VISIBILITY', 'LIGHT', 'RDSFCOND'])
 
         collisions = remove_whitespace(
             collisions,
@@ -195,17 +120,7 @@ class MVCFatClassPipeline:
         if drop_features:
             grouped_collisions = grouped_collisions.drop(columns=FEATURES_TO_DROP)
 
-        # One value columns to bool
-        cols_with_one_value = grouped_collisions.nunique().eq(1)
-        bool_cols = cols_with_one_value[cols_with_one_value].index
-        grouped_collisions[bool_cols] = grouped_collisions[bool_cols].astype(bool)
-
-        # Objects to category
-        grouped_collisions[grouped_collisions.select_dtypes(['object']).columns] = (
-            grouped_collisions
-            .select_dtypes(['object'])
-            .apply(lambda x: x.astype('category'))
-        )
+        change_dtypes(grouped_collisions)
 
         self.collisions = grouped_collisions
 
@@ -217,13 +132,13 @@ class MVCFatClassPipeline:
 
     def _split_data(self, test_size=0.2, seed=42):
         X = self.collisions.drop(columns='ACCLASS')
-        y = self.collisions['ACCLASS'].map({'Fatal': 1, 'Non-Fatal Injury': 0})
+        y = self.collisions['ACCLASS']
 
         split = train_test_split(X, y, test_size=test_size, random_state=seed,
                                  stratify=y)
         self.X_train, self.X_test, self.y_train, self.y_test = split
 
-    def _train_model_with_catboost(self):
+    def _train_model_with_catboost(self, n_trials: int):
 
         train_pool = cb.Pool(
             data=self.X_train,
@@ -231,16 +146,21 @@ class MVCFatClassPipeline:
             cat_features=CAT_FEATURES
         )
 
+        if is_max_optimal(self.cb_model_config.params.eval_metric):
+            self.direction = 'maximize'
+        else:
+            self.direction = 'minimize'
+
         # Tune hyperparameters
-        study = optuna.create_study(direction='minimize')
+        study = optuna.create_study(direction='maximize')
         study.optimize(
             lambda trial: self._cb_objective(trial, train_pool),
-            n_trials=1
+            n_trials=n_trials
         )
 
         # Fit model with best hyperparameters
         best_params = study.best_trial.user_attrs['full_params']
-        best_model = cb.CatBoostClassifier(**best_params, verbose=False)
+        best_model = cb.CatBoostClassifier(**best_params, verbose=False, class_names=[0, 1])
         best_model.fit(train_pool)
         self.model = best_model
         self.feature_importance = pd.DataFrame(
@@ -248,32 +168,14 @@ class MVCFatClassPipeline:
             index=self.X_train.columns
         )
 
-    def _unpack_params(self, trial: optuna.Trial, config):
-        params = {}
-
-        for param, value in config.params.model_dump().items():
-            if type(value) is list:
-                distribution = trial.suggest_categorical(param, value)
-            elif type(value) is tuple:
-                if type(value[0]) is float:
-                    distribution = trial.suggest_float(param, *value)
-                else:
-                    distribution = trial.suggest_int(param, *value)
-            else:
-                distribution = value
-
-            params[param] = distribution
-
-        return params
-
     def _cb_objective(self, trial: optuna.Trial, train_pool: cb.Pool):
 
-        params = self._unpack_params(trial, self.cb_model_config)
+        params, config = unpack_params(trial, self.cb_model_config, 'CatBoost', self.y_train.to_numpy())
 
         cv_results = cb.cv(
             train_pool,
             params,
-            **self.cb_model_config.model_dump(exclude='params')
+            **config.model_dump(exclude='params')
         )
 
         cv_scores = cv_results[f'test-{params["eval_metric"]}-mean']
@@ -282,9 +184,11 @@ class MVCFatClassPipeline:
         params['iterations'] = cv_results['iterations'].max()
         trial.set_user_attr('full_params', params)
 
+        if self.direction == 'maximize':
+            return np.max(cv_scores)
         return np.min(cv_scores)
 
-    def _train_model_with_xgboost(self):
+    def _train_model_with_xgboost(self, n_trials: int):
 
         dtrain = xgb.DMatrix(
             data=self.X_train,
@@ -292,11 +196,16 @@ class MVCFatClassPipeline:
             enable_categorical=True
         )
 
+        if is_max_optimal(self.xgb_model_config.params.eval_metric):
+            self.direction = 'maximize'
+        else:
+            self.direction = 'minimize'
+
         # Tune hyperparameters
-        study = optuna.create_study(direction='minimize')
+        study = optuna.create_study(direction=self.direction)
         study.optimize(
             lambda trial: self._xgb_objective(trial, dtrain),
-            n_trials=10
+            n_trials=n_trials
         )
 
         # Fit model with best hyperparameters
@@ -313,43 +222,54 @@ class MVCFatClassPipeline:
 
     def _xgb_objective(self, trial, dtrain):
 
-        param = self._unpack_params(trial, self.xgb_model_config)
+        param, config = unpack_params(trial, self.xgb_model_config, 'XGBoost', self.y_train.to_numpy())
 
         cv_results = xgb.cv(
             param,
             dtrain,
-            **self.xgb_model_config.model_dump(exclude='params')
+            **config.model_dump(exclude='params')
         )
 
-        cv_scores = cv_results[f'test-{param["eval_metric"]}-mean']
+        if self.xgb_model_config.params.eval_metric in ['LDAM', 'EQ']:
+            cv_scores = cv_results['test-loss-mean']
+        else:
+            cv_scores = cv_results[f'test-{param["eval_metric"]}-mean']
 
         # Add optimal iterations to params
         param['n_estimators'] = cv_scores.idxmin() + 1
         trial.set_user_attr('full_params', param)
 
+        if self.direction == 'maximize':
+            return np.max(cv_scores)
         return np.min(cv_scores)
 
-    def _train_model(self, algorithm):
+    def _train_model(self, algorithm: Algorithm, n_trials: int):
 
         if (train_func := self.algorithms.get(algorithm)):
-            train_func()
+            train_func(n_trials)
         else:
             raise ValueError(f'Unsupported algorithm: {algorithm}')
 
     def run_training(
             self,
             algorithm: Algorithm,
+            n_trials: int = 1,
             save_data: bool = True,
             save_path: Path = DATA_DIR,
             overwrite: bool = False
     ):
 
-        self._fetch_data()
-        self._prep_data()
-        if save_data:
-            self._to_disk(save_path, overwrite)
+        if self.cache_dir is None:
+            self._fetch_data()
+            self._prep_data()
+            if save_data:
+                self._to_disk(save_path, overwrite)
+        else:
+            data = pd.read_csv(self.cache_dir)
+            change_dtypes(data)
+            self.collisions = data
         self._split_data()
-        self._train_model(algorithm)
+        self._train_model(algorithm, n_trials)
 
     def _load_model(self, filepath: Path):
         model = xgb.XGBClassifier()
@@ -358,8 +278,10 @@ class MVCFatClassPipeline:
 
     def predict(self):
         y_pred = self.model.predict(self.X_test)
+        self.report = classification_report(self.y_test, y_pred)
+        self.confusion_matrix = confusion_matrix(self.y_test, y_pred)
         accuracy = np.mean(y_pred == self.y_test)
-        return round(accuracy, 3)
+        return np.around(accuracy, 3)
 
 
 if __name__ == '__main__':
