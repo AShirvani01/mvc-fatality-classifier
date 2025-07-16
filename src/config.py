@@ -4,8 +4,8 @@ from pydantic import (
     BaseModel,
     ConfigDict,
     Field,
-    field_validator,
-    NonNegativeFloat
+    NonNegativeFloat,
+    PositiveFloat
 )
 
 
@@ -18,6 +18,8 @@ DATA_DIR = get_project_root() / 'data'
 HEALTH_SERVICES_PATH = DATA_DIR / 'ontario_health_services.geojson'
 NEIGHBOURHOODS_PATH = DATA_DIR / 'toronto_neighbourhoods.geojson'
 STREETS_PATH = DATA_DIR / 'canada_streets' / 'canada_streets.shp'
+
+MODEL_DIR = get_project_root() / 'models'
 
 
 class CBParams(BaseModel):
@@ -36,22 +38,31 @@ class CBParams(BaseModel):
             at each split selection.
     """
     # Type alias
-    Objective: ClassVar[type] = Literal['Logloss']
-    EvalMetric: ClassVar[type] = Literal['Logloss', 'Accuracy', 'F1', 'Recall', 'AUC']
-    AutoClassWeights: ClassVar[type] = Literal['None', 'Balanced', 'SqrtBalanced']
+    Objective: ClassVar[type] = Literal['Logloss', 'FocalLoss', 'LDAM']
+    EvalMetric: ClassVar[type] = Literal['Logloss', 'Accuracy', 'F1', 'Recall', 'AUC', 'BrierScore', 'Focal', 'MCC', 'WKappa']
     Depth: ClassVar[type] = Annotated[int, Field(ge=1, le=16)]
     L2LeafReg: ClassVar[type] = NonNegativeFloat
     LearningRate: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
     RSM: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
+    ScalePosWeight: ClassVar[type] = PositiveFloat
+    FocalAlpha: ClassVar[type] = Annotated[float, Field(gt=0, lt=1)]
+    FocalGamma: ClassVar[type] = NonNegativeFloat
 
-    # Params/Defining defaults
-    objective: Objective | list[Objective] = 'Logloss'
-    eval_metric: EvalMetric | list[EvalMetric] = 'Accuracy'
-    auto_class_weights: AutoClassWeights | list[AutoClassWeights] = 'Balanced'
-    depth: Depth | tuple[Depth, Depth] | list[Depth] = (1, 16)
+    # Params
+    objective: Objective = 'LDAM'
+    eval_metric: EvalMetric = 'F1'
+    depth: Depth | tuple[Depth, Depth] | list[Depth] = (6, 10)
     l2_leaf_reg: L2LeafReg | tuple[L2LeafReg, L2LeafReg] | list[L2LeafReg] = (0., 100.)
-    learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.01, 0.1)
-    rsm: RSM | tuple[RSM, RSM] | list[RSM] = (0.1, 1)
+    learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.001, 0.1)
+    rsm: RSM | tuple[RSM, RSM] | list[RSM] = (0.1, 1.)
+    scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = (0.1, 8.)
+
+    # Custom Loss Params
+    LDAM_max_m: NonNegativeFloat = 0.5
+    EQ_gamma: NonNegativeFloat = 0.3
+    EQ_mu: NonNegativeFloat = 0.8
+    # focal_alpha: FocalAlpha = (0.1, 0.9)
+    # focal_gamma: FocalGamma = (0., 10.)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -75,6 +86,7 @@ class CBModelConfig(BaseModel):
     fold_count: int = 5
     num_boost_round: int = 10_000
     seed: int = 42
+    stratified: bool = True
     verbose: Union[bool, int] = False
 
     model_config = ConfigDict(extra='forbid')
@@ -95,20 +107,25 @@ class XGBParams(BaseModel):
             to use at each split selection.
     """
     # Type alias
-    Objective: ClassVar[type] = Literal['binary:logistic']
-    EvalMetric: ClassVar[type] = Literal['logloss', 'error', 'auc']
+    Objective: ClassVar[type] = Literal['binary:logistic', 'LDAM']
+    EvalMetric: ClassVar[type] = Literal['logloss', 'error', 'auc', 'aucpr']
     MaxDepth: ClassVar[type] = Annotated[int, Field(ge=1, le=16)]
     RegLambda: ClassVar[type] = NonNegativeFloat
     LearningRate: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
+    ScalePosWeight: ClassVar[type] = NonNegativeFloat
     SubSample: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
 
     # Params/Defining defaults
-    objective: Objective | list[Objective] = 'binary:logistic'
-    eval_metric: EvalMetric | list[EvalMetric] = 'error'
-    max_depth: MaxDepth | tuple[MaxDepth, MaxDepth] | list[MaxDepth] = (1, 16)
-    reg_lambda: RegLambda | tuple[RegLambda, RegLambda] | list[RegLambda] = (0., 100.)
+    objective: Objective = 'LDAM'
+    eval_metric: EvalMetric = 'LDAM'
+    max_depth: MaxDepth | tuple[MaxDepth, MaxDepth] | list[MaxDepth] = (6, 10)
+    reg_lambda: RegLambda | tuple[RegLambda, RegLambda] | list[RegLambda] = (0., 1000.)
     learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.01, 0.1)
+    scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = (1., 15.)
     subsample: SubSample | tuple[SubSample, SubSample] | list[SubSample] = (0.1, 1)
+    LDAM_max_m: NonNegativeFloat = (0.1, 1.)
+    EQ_gamma: NonNegativeFloat = 0.3
+    EQ_mu: NonNegativeFloat = 0.8
 
     model_config = ConfigDict(extra='forbid')
 
@@ -129,9 +146,11 @@ class XGBModelConfig(BaseModel):
 
     params: XGBParams = XGBParams()
     early_stopping_rounds: int = 100
+    # folds: int = 5
     nfold: int = 5
     num_boost_round: int = 10_000
     seed: int = 42
+    stratified: bool = True
     verbose_eval: Union[bool, int] = False
 
-    model_config = ConfigDict(extra='forbid')
+    model_config = ConfigDict(extra='allow')
