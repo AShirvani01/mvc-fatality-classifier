@@ -378,9 +378,9 @@ def change_dtypes(data: pd.DataFrame) -> None:
     data['ACCLASS'] = data['ACCLASS'].map({'Fatal': 1, 'Non-Fatal Injury': 0})
 
 
-def fill_acclass(collisions: pd.DataFrame) -> pd.DataFrame:
-    grouped_collisions = group_collisions(collisions)
-    data = collisions.copy()
+def fill_acclass(data: pd.DataFrame) -> pd.DataFrame:
+    grouped_collisions = group_collisions(data)
+
     na_acclass = grouped_collisions['ACCLASS'].transform(lambda x: x.isna())
     atleast_1_fatal_injury = grouped_collisions['INJURY'].transform(lambda x: x.eq('Fatal').any())
     no_na_injury = grouped_collisions['INJURY'].transform(lambda x: x.notna().all())
@@ -393,6 +393,55 @@ def fill_acclass(collisions: pd.DataFrame) -> pd.DataFrame:
     )
 
     data = data.query('~ACCLASS.isna()')
-    
+
     return data
 
+
+def fill_rare_classes(data: pd.DataFrame) -> pd.DataFrame:
+
+    # Filling missing/dropping rare classes in features
+    data['IMPACTYPE'] = data['IMPACTYPE'].fillna('Unknown')
+    data['MANOEUVER'] = np.where(
+        data['MANOEUVER'] == 'Disabled',
+        np.nan,
+        data['MANOEUVER']
+    )
+    data['ROAD_CLASS'] = np.where(
+        data['ROAD_CLASS'].isin(['Laneway', 'Major Shoreline']),
+        'Other',
+        data['ROAD_CLASS'])
+
+    data['TRAFFCTL'] = np.where(
+        data['TRAFFCTL'].isin(
+            ['Yield Sign', 'Streetcar (Stop for)', 'Traffic Gate',
+             'School Guard', 'Police Control', 'Traffic Controller']),
+        'Other',
+        data['TRAFFCTL'])
+
+    data['VISIBILITY'] = np.where(
+        data['VISIBILITY'].isin(
+            ['Fog, Mist, Smoke, Dust', 'Freezing Rain', 'Drifting Snow',
+             'Strong wind']),
+        'Other',
+        data['VISIBILITY'])
+
+    data['LIGHT'] = np.where(
+        ~data['LIGHT'].isin(
+            ['Daylight', 'Dark, artificial', 'Dark']),
+        'Other',
+        data['LIGHT'])
+
+    data['RDSFCOND'] = np.where(
+        ~data['RDSFCOND'].isin(
+            ['Dry', 'Wet']),
+        'Other',
+        data['RDSFCOND'])
+
+    # Response
+    data['ACCLASS'] = np.where(
+        data['ACCLASS'] == 'Property Damage O',
+        'Non-Fatal Injury',
+        data['ACCLASS']
+    )
+
+    return data
