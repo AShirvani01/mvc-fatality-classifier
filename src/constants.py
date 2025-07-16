@@ -76,3 +76,21 @@ CAT_FEATURES = [
 class Algorithm(Enum):
     CATBOOST = 'CatBoost'
     XGBOOST = 'XGBoost'
+
+
+max_optimal_metrics = {
+    'accuracy',
+    'f1',
+    'recall',
+    'auc',
+    'aucpr',
+    'mcc',
+    'wkappa'
+}
+
+min_optimal_metrics = {
+    'error',
+    'logloss',
+    'brierscore',
+    'focal'
+}
