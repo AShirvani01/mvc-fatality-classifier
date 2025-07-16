@@ -63,6 +63,7 @@ def dist_to_nearest_hospital(
     Returns:
         The input collisions Geodataframe with added DIST_TO_HOS feature.
     """
+
     nA = np.array(list(collisions['geometry'].apply(lambda x: (x.x, x.y))))
     nB = np.array(list(hospitals['geometry'].apply(lambda x: (x.x, x.y))))
     btree = cKDTree(nB)
@@ -357,4 +358,22 @@ def long_to_wide(
     )
 
     return merged_collisions
+
+
+def change_dtypes(data: pd.DataFrame) -> None:
+
+    # One value columns to bool
+    cols_with_one_value = data.nunique().eq(1)
+    bool_cols = cols_with_one_value[cols_with_one_value].index
+    data[bool_cols] = data[bool_cols].astype(bool)
+
+    # Objects to category
+    data[data.select_dtypes(['object']).columns] = (
+        data
+        .select_dtypes(['object'])
+        .apply(lambda x: x.astype('category'))
+    )
+
+    # Response to int
+    data['ACCLASS'] = data['ACCLASS'].map({'Fatal': 1, 'Non-Fatal Injury': 0})
 
