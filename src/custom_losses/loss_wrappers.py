@@ -1,6 +1,8 @@
 import numpy as np
 from typing import Tuple
 from numdifftools import Derivative
+import torch
+from torch.autograd import grad
 
 
 class loss_wrapper:
@@ -8,39 +10,45 @@ class loss_wrapper:
     def __init__(
         self,
         loss_function,
-        use_minus_loss_as_objective=True,
         clip=False,
         adaptive_weighting=False
     ):
 
         self.loss_function = loss_function
-        self.sign = -1 if use_minus_loss_as_objective else 1
         self.clip = clip
         self.adaptive = adaptive_weighting
 
-    def get_gradient(self, y_pred, y_true) -> Tuple[np.ndarray, np.ndarray]:
-        y_true = y_true.get_label()
+    def get_gradient(self, y_pred: np.ndarray, y_true: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
-        def func(x):
-            return self.loss_function(y_true, x)
+        y_true = torch.tensor(y_true.get_label())
+        y_pred = torch.tensor(y_pred, requires_grad=True)
 
-        deriv1 = Derivative(func, n=1)(y_pred) * self.sign
-        deriv2 = Derivative(func, n=2)(y_pred) * self.sign
+        loss = -self.loss_function(y_true, y_pred).sum()
+
+        gradient = grad(loss, y_pred, create_graph=True)[0]  # Shape(y_pred, )
+        assert gradient.numel() == y_pred.numel()
+
+        hessian = torch.zeros_like(y_pred)
+        for i in range(y_pred.numel()):
+            hessian[i] = grad(gradient[i], y_pred, create_graph=True)[0][i]  # Shape(y_pred, )
+        assert hessian.numel() == y_pred.numel()
 
         if self.clip:
-            deriv1 = np.clip(deriv1, -1, 1)
-            deriv2 = np.clip(deriv2, -1, 1)
+            gradient = torch.clamp(gradient, -1, 1)
+            hessian = torch.clamp(hessian, -1, 1)
 
-        return deriv1, deriv2
+        return gradient.detach().numpy(), hessian.detach().numpy()
 
-    def get_metric(self, y_pred, y_true):
-        y_true = y_true.get_label()
+    def get_metric(self, y_pred: np.ndarray, y_true: np.ndarray):
+        y_true = torch.tensor(y_true.get_label())
+        y_pred = torch.tensor(y_pred)
+
         if self.adaptive is False:
-            loss = -np.mean(self.loss_function(y_true, y_pred))
+            loss = -torch.mean(self.loss_function(y_true, y_pred))
         else:
-            loss = -np.mean(self.loss_function(y_true, y_pred, training=False))
+            loss = -torch.mean(self.loss_function(y_true, y_pred, training=False))
 
-        return "loss", loss
+        return 'loss', loss.detach().numpy()
 
 
 class cat_wrapper:

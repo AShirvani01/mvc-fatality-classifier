@@ -19,7 +19,6 @@ def create_objective(objective_name, y_true, params, algorithm):
 
     if objective_name == 'LDAM':
         loss = LDAM_loss(y_true, params['LDAM_max_m'])
-        loss.get_init_score()
 
     # Wrappers
     if algorithm == 'XGBoost':
