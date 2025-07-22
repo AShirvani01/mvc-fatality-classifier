@@ -270,6 +270,14 @@ class MVCFatClassPipeline:
             self.collisions = data
         self._split_data()
         self._train_model(algorithm, n_trials)
+        
+    def save_model(self, file_name: 'str', file_path: Path = MODEL_DIR, overwrite: bool = False):
+        if self.model is None:
+            print('No model to save.')
+        elif (file_path / file_name).exists() and not overwrite:
+            print('Model with file name already exists. Set overwrite to True or set new file name.')
+        else:
+            self.model.save_model(file_path / file_name, format='json')
 
     def _load_model(self, filepath: Path):
         model = xgb.XGBClassifier()
