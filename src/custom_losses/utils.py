@@ -25,7 +25,7 @@ def create_objective(objective_name, y_true, params, algorithm):
         objective = loss_wrapper(loss)
 
     elif algorithm == 'CatBoost':
-        objective = cat_wrapper(loss)
+        objective = cat_wrapper(loss, clip=True)
 
     return objective
 

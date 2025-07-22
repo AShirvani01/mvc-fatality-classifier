@@ -42,16 +42,7 @@ class LDAM_loss(loss_function):
         self.s = s
 
     def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor):
-        """
-        y_pred = torch.stack([y_pred, torch.where(y_pred == 0, 1, 0)], dim=1)  # [N,2]
-        y_true = torch.stack([y_true, torch.where(y_true == 0, 1, 0)], dim=1)
-        index = torch.zeros_like(y_pred, dtype=torch.uint8)
-        index.scatter_(1, y_true, 1)
-        index_float = index.type(torch.FloatTensor)
 
-        batch_m = torch.matmul(self.m_list[None, :], index_float.transpose(0, 1))
-        batch_m = batch_m.view((-1, 1))
-        """
         index = y_true > 0
         batch_m = torch.where(index, self.m_list[1], self.m_list[0])
         y_m = y_pred - batch_m
