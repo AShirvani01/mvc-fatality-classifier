@@ -2,6 +2,10 @@ from custom_losses.loss_functions import *
 from custom_losses.loss_wrappers import loss_wrapper, cat_wrapper
 import optuna
 from constants import min_optimal_metrics, max_optimal_metrics
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import *
+import numpy as np
+import scipy.optimize as opt
 
 
 def is_max_optimal(metric: str) -> bool:
@@ -73,3 +77,46 @@ def unpack_params(trial: optuna.Trial, config, algorithm, y_true):
         params.pop(param)
 
     return params, config
+
+
+def get_optimal_threshold(y_train, y_train_proba):
+    """
+    - Find optimal threshold using CV on training set (optimizing MCC)
+    - Loss function was trained using PR-AUC which is threshold-invariant, thus
+    using the default 0.5 threshold likely doesn't yield the best results.
+    """
+
+    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    thresholds = []
+
+    for train_idx, val_idx in skf.split(np.zeros(len(y_train)), y_train):
+        y_val = y_train[val_idx]
+        y_val_proba = y_train_proba[val_idx]
+
+        res = opt.minimize_scalar(
+            lambda p: -matthews_corrcoef(y_val, (y_val_proba >= p).astype(int)),
+            bounds=(0, 1),
+            method='bounded'
+        )
+        thresholds.append(res.x)
+
+    return np.mean(thresholds)
+
+def get_metrics(y_test, y_test_proba, optimal_threshold):
+
+    test_preds = (y_test_proba >= optimal_threshold).astype(int)
+
+    metrics = {
+        'roc': roc_auc_score(y_test, test_preds),
+        'pr': average_precision_score(y_test, test_preds),
+        'acc': accuracy_score(y_test, test_preds),
+        'bacc': balanced_accuracy_score(y_test, test_preds),
+        'pre': precision_score(y_test, test_preds),
+        'rec': recall_score(y_test, test_preds),
+        'f1': f1_score(y_test, test_preds),
+        'mcc': matthews_corrcoef(y_test, test_preds)
+    }
+
+    cm = confusion_matrix(y_test, test_preds)
+
+    return metrics, cm

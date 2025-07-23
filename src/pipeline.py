@@ -124,7 +124,7 @@ class MVCFatClassPipeline:
 
         self.collisions = grouped_collisions
 
-    def _to_disk(self, save_path: Path, overwrite: bool):
+    def _save_data(self, save_path: Path, overwrite: bool):
         if (save_path / 'processed_data.csv').exists() and not overwrite:
             print('processed_data.csv already exists and overwrite is set to False.')
             return
@@ -262,34 +262,50 @@ class MVCFatClassPipeline:
         if self.cache_dir is None:
             self._fetch_data()
             self._prep_data()
+            self._split_data()
             if save_data:
-                self._to_disk(save_path, overwrite)
+                self._save_data(save_path, overwrite)
         else:
-            data = pd.read_csv(self.cache_dir)
-            change_dtypes(data)
-            self.collisions = data
-        self._split_data()
+            self.load_data()
         self._train_model(algorithm, n_trials)
-        
-    def save_model(self, file_name: 'str', file_path: Path = MODEL_DIR, overwrite: bool = False):
+
+    def save_model(self, file_name: str, algorithm: Algorithm, file_path: Path = MODEL_DIR, overwrite: bool = False):
         if self.model is None:
             print('No model to save.')
+            return
         elif (file_path / file_name).exists() and not overwrite:
             print('Model with file name already exists. Set overwrite to True or set new file name.')
-        else:
+            return
+
+        if algorithm == Algorithm.XGBOOST:
+            self.model.save_model(file_path / file_name)
+        elif algorithm == Algorithm.CATBOOST:
             self.model.save_model(file_path / file_name, format='json')
 
-    def _load_model(self, filepath: Path):
-        model = xgb.XGBClassifier()
-        model.load_model(filepath)
+    def load_data(self):
+        data = pd.read_csv(self.cache_dir)
+        change_dtypes(data)
+        self.collisions = data
+        self._split_data()
+        
+
+    def load_model(self, file_name: str, algorithm: Algorithm, file_path: Path = MODEL_DIR):
+        if algorithm == Algorithm.XGBOOST:
+            model = xgb.XGBClassifier()
+            model.load_model(file_path / file_name)
+        elif algorithm == Algorithm.CATBOOST:
+            model = cb.CatBoostClassifier()
+            model.load_model(file_path / file_name, format='json')
+
         self.model = model
 
     def predict(self):
-        y_pred = self.model.predict(self.X_test)
-        self.report = classification_report(self.y_test, y_pred)
-        self.confusion_matrix = confusion_matrix(self.y_test, y_pred)
-        accuracy = np.mean(y_pred == self.y_test)
-        return np.around(accuracy, 3)
+        y_train_proba = self.model.predict_proba(self.X_train)[:, 1]
+        y_test_proba = self.model.predict_proba(self.X_test)[:, 1]
+
+        self.threshold = get_optimal_threshold(self.y_train.values, y_train_proba)
+        metrics, self.confusion_matrix = get_metrics(self.y_test.values, y_test_proba, self.threshold)
+        self.metrics = pd.DataFrame(metrics, index=[0])
 
 
 if __name__ == '__main__':
