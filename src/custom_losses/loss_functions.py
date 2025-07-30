@@ -69,7 +69,7 @@ class Focal_loss(loss_function):
 
         p = torch.sigmoid(y_pred)
 
-        pos_loss = ((1-p) ** self.gamma) * torch.log(p) * self.alpha_m
-        neg_loss = (p ** self.gamma) * torch.log(1-p) * self.alpha_M
+        pos_loss = torch.pow(1-p, self.gamma) * torch.log(p) * self.alpha_m
+        neg_loss = torch.pow(p, self.gamma) * torch.log(1-p) * self.alpha_M
 
         return y_true * pos_loss + (1 - y_true) * neg_loss

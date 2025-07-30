@@ -1,7 +1,7 @@
 from custom_losses.loss_functions import *
 from custom_losses.loss_wrappers import loss_wrapper, cat_wrapper
 import optuna
-from constants import MIN_OPTICAL_METRICS, MAX_OPTIMAL_METRICS, CUSTOM_OBJECTIVES, CUSTOM_PARAMS
+from constants import MIN_OPTIMAL_METRICS, MAX_OPTIMAL_METRICS, CUSTOM_OBJECTIVES, CUSTOM_PARAMS
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import *
 import numpy as np
