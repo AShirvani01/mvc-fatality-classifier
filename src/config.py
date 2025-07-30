@@ -38,31 +38,32 @@ class CBParams(BaseModel):
             at each split selection.
     """
     # Type alias
-    Objective: ClassVar[type] = Literal['Logloss', 'FocalLoss', 'LDAM']
-    EvalMetric: ClassVar[type] = Literal['Logloss', 'Accuracy', 'F1', 'Recall', 'AUC', 'BrierScore', 'Focal', 'MCC', 'WKappa']
+    Objective: ClassVar[type] = Literal['Logloss', 'LDAM', 'Focal']
+    EvalMetric: ClassVar[type] = Literal['Logloss', 'Accuracy', 'F1', 'Recall', 'AUC', 'PRAUC', 'BrierScore', 'Focal', 'MCC', 'WKappa']
     Depth: ClassVar[type] = Annotated[int, Field(ge=1, le=16)]
     L2LeafReg: ClassVar[type] = NonNegativeFloat
     LearningRate: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
     RSM: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
     ScalePosWeight: ClassVar[type] = PositiveFloat
+    
+    LDAM: ClassVar[type] = Annotated[float, Field(gt=0, lt=1)]
     FocalAlpha: ClassVar[type] = Annotated[float, Field(gt=0, lt=1)]
     FocalGamma: ClassVar[type] = NonNegativeFloat
 
     # Params
-    objective: Objective = 'LDAM'
-    eval_metric: EvalMetric = 'F1'
+    objective: Objective = 'Logloss'
+    eval_metric: EvalMetric = 'PRAUC'
     depth: Depth | tuple[Depth, Depth] | list[Depth] = (6, 10)
-    l2_leaf_reg: L2LeafReg | tuple[L2LeafReg, L2LeafReg] | list[L2LeafReg] = (0., 100.)
+    l2_leaf_reg: L2LeafReg | tuple[L2LeafReg, L2LeafReg] | list[L2LeafReg] = (0, 100)
     learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.001, 0.1)
-    rsm: RSM | tuple[RSM, RSM] | list[RSM] = (0.1, 1.)
-    scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = (0.1, 8.)
+    # rsm: RSM | tuple[RSM, RSM] | list[RSM] = 0.8
+    scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = 6.
 
     # Custom Loss Params
-    LDAM_max_m: NonNegativeFloat = 0.5
+    LDAM_max_m: LDAM | tuple[LDAM, LDAM] = 0.5
     EQ_gamma: NonNegativeFloat = 0.3
     EQ_mu: NonNegativeFloat = 0.8
-    # focal_alpha: FocalAlpha = (0.1, 0.9)
-    # focal_gamma: FocalGamma = (0., 10.)
+    Focal_gamma: NonNegativeFloat | tuple[NonNegativeFloat, NonNegativeFloat] = (1.0, 3.0)
 
     model_config = ConfigDict(extra='forbid')
 
@@ -107,25 +108,30 @@ class XGBParams(BaseModel):
             to use at each split selection.
     """
     # Type alias
-    Objective: ClassVar[type] = Literal['binary:logistic', 'LDAM']
+    Objective: ClassVar[type] = Literal['binary:logistic', 'LDAM', 'Focal']
     EvalMetric: ClassVar[type] = Literal['logloss', 'error', 'auc', 'aucpr']
     MaxDepth: ClassVar[type] = Annotated[int, Field(ge=1, le=16)]
     RegLambda: ClassVar[type] = NonNegativeFloat
     LearningRate: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
     ScalePosWeight: ClassVar[type] = NonNegativeFloat
     SubSample: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
+    
+    LDAM: ClassVar[type] = Annotated[float, Field(gt=0, lt=1)]
 
     # Params/Defining defaults
-    objective: Objective = 'LDAM'
-    eval_metric: EvalMetric = 'LDAM'
+    objective: Objective = 'Focal'
+    eval_metric: EvalMetric = 'aucpr'
     max_depth: MaxDepth | tuple[MaxDepth, MaxDepth] | list[MaxDepth] = (6, 10)
     reg_lambda: RegLambda | tuple[RegLambda, RegLambda] | list[RegLambda] = (0., 1000.)
     learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.01, 0.1)
     scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = (1., 15.)
     subsample: SubSample | tuple[SubSample, SubSample] | list[SubSample] = (0.1, 1)
-    LDAM_max_m: NonNegativeFloat = (0.1, 1.)
+    
+    # Custom Loss Params
+    LDAM_max_m: LDAM | tuple[LDAM, LDAM] = (0.1, 0.8)
     EQ_gamma: NonNegativeFloat = 0.3
     EQ_mu: NonNegativeFloat = 0.8
+    Focal_gamma: NonNegativeFloat | tuple[NonNegativeFloat, NonNegativeFloat] = (1.0, 3.0)
 
     model_config = ConfigDict(extra='forbid')
 

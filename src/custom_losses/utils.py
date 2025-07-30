@@ -1,7 +1,7 @@
 from custom_losses.loss_functions import *
 from custom_losses.loss_wrappers import loss_wrapper, cat_wrapper
 import optuna
-from constants import min_optimal_metrics, max_optimal_metrics
+from constants import MIN_OPTICAL_METRICS, MAX_OPTIMAL_METRICS, CUSTOM_OBJECTIVES, CUSTOM_PARAMS
 from sklearn.model_selection import StratifiedKFold
 from sklearn.metrics import *
 import numpy as np
@@ -11,9 +11,9 @@ import scipy.optimize as opt
 def is_max_optimal(metric: str) -> bool:
     metric = metric.lower().strip()
 
-    if metric in max_optimal_metrics:
+    if metric in MAX_OPTIMAL_METRICS:
         return True
-    elif metric in min_optimal_metrics:
+    elif metric in MIN_OPTICAL_METRICS:
         return False
     else:
         ValueError(f'Unknown metric: {metric}')
@@ -23,6 +23,9 @@ def create_objective(objective_name, y_true, params, algorithm):
 
     if objective_name == 'LDAM':
         loss = LDAM_loss(y_true, params['LDAM_max_m'])
+
+    elif objective_name == 'Focal':
+        loss = Focal_loss(y_true, params['Focal_gamma'])
 
     # Wrappers
     if algorithm == 'XGBoost':
@@ -51,9 +54,7 @@ def unpack_params(trial: optuna.Trial, config, algorithm, y_true):
         params[param] = distribution
 
     # Custom Loss
-    custom_names = ['LDAM', 'EQ']
-
-    if params['objective'] in custom_names:
+    if params['objective'] in CUSTOM_OBJECTIVES:
         params.pop('scale_pos_weight')
         objective = create_objective(params['objective'], y_true, params, algorithm)
 
@@ -61,19 +62,11 @@ def unpack_params(trial: optuna.Trial, config, algorithm, y_true):
             config.obj = objective.get_gradient
             params.pop('objective')
 
-            if params['eval_metric'] in custom_names:
-                config.custom_metric = objective.get_metric
-                params.pop('eval_metric')
-
-        if algorithm == 'CatBoost':
+        elif algorithm == 'CatBoost':
             params['objective'] = objective
-            if params['eval_metric'] in custom_names:
-                params['eval_metric'] = objective
 
     # Remove unnecessary custom params
-    custom_params = ['LDAM_max_m', 'EQ_gamma', 'EQ_mu']
-
-    for param in custom_params:
+    for param in CUSTOM_PARAMS:
         params.pop(param)
 
     return params, config
@@ -108,7 +101,7 @@ def get_metrics(y_test, y_test_proba, optimal_threshold):
 
     metrics = {
         'roc': roc_auc_score(y_test, test_preds),
-        'pr': average_precision_score(y_test, test_preds),
+        'pr': average_precision_score(y_test, y_test_proba),
         'acc': accuracy_score(y_test, test_preds),
         'bacc': balanced_accuracy_score(y_test, test_preds),
         'pre': precision_score(y_test, test_preds),

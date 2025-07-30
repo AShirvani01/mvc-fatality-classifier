@@ -34,7 +34,7 @@ def get_collision_data() -> pd.DataFrame:
     return collision_data
 
 
-def convert_to_geodata(df: pd.DataFrame, crs="EPSG:4326") -> gpd.GeoDataFrame:
+def convert_to_geodata(df: pd.DataFrame, crs='EPSG:2958') -> gpd.GeoDataFrame:
     """Convert Dataframe to Geodataframe.
 
     Args:
@@ -53,12 +53,13 @@ def convert_to_geodata(df: pd.DataFrame, crs="EPSG:4326") -> gpd.GeoDataFrame:
         .pipe(gpd.GeoSeries.from_wkt)
     )
 
-    gdf = gpd.GeoDataFrame(df, crs=crs, geometry="geometry")
+    gdf = gpd.GeoDataFrame(df, crs='EPSG:4326', geometry="geometry")
+    gdf = gdf.to_crs(crs=crs)
 
     return gdf
 
 
-def load_external_data(file_path: Path, crs="EPSG:4326") -> gpd.GeoDataFrame:
+def load_external_data(file_path: Path, crs='EPSG:2958') -> gpd.GeoDataFrame:
     """Load external data.
 
     Args:

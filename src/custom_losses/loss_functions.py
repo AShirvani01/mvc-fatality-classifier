@@ -1,7 +1,5 @@
 import numpy as np
-from scipy import optimize as opt
 import torch
-import torch.nn.functional as F
 
 
 class loss_function:
@@ -25,7 +23,7 @@ class loss_function:
 
 
 class LDAM_loss(loss_function):
-    "based on https://github.com/kaidic/LDAM-DRW"
+    """based on https://arxiv.org/pdf/1906.07413"""
 
     def __init__(self, y_true: np.ndarray, max_m=0.5, class_weight='balanced', s=30):
 
@@ -33,9 +31,9 @@ class LDAM_loss(loss_function):
 
         minority = np.sum(y_true)
         majority = len(y_true) - minority
-        cls_num_list = [majority, minority]
-        m_list = np.power(cls_num_list, -1/4)
-        m_list *= max_m / np.max(m_list)
+        cls_num_list = torch.tensor([majority, minority])
+        m_list = torch.pow(cls_num_list, -1/4)
+        m_list *= max_m / torch.max(m_list)
         self.m_list = m_list
 
         assert s > 0
@@ -52,5 +50,26 @@ class LDAM_loss(loss_function):
         p = torch.sigmoid(self.s*output)
         pos_loss = torch.log(p) * self.alpha_m
         neg_loss = torch.log(1-p) * self.alpha_M
+
+        return y_true * pos_loss + (1 - y_true) * neg_loss
+
+
+###############################################################################
+
+
+class Focal_loss(loss_function):
+    """based on https://arxiv.org/pdf/1708.02002"""
+
+    def __init__(self, y_true, gamma=2.0, class_weight='balanced'):
+
+        super().__init__(y_true, class_weight)
+        self.gamma = gamma
+
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor):
+
+        p = torch.sigmoid(y_pred)
+
+        pos_loss = ((1-p) ** self.gamma) * torch.log(p) * self.alpha_m
+        neg_loss = (p ** self.gamma) * torch.log(1-p) * self.alpha_M
 
         return y_true * pos_loss + (1 - y_true) * neg_loss

@@ -2,11 +2,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import classification_report, confusion_matrix
 import catboost as cb
 import xgboost as xgb
 import optuna
 from typing import Callable
+from time import time
 
 
 from data import (
@@ -32,7 +32,7 @@ from preprocessing import *
 from custom_losses.utils import *
 
 
-class MVCFatClassPipeline:
+class CrashClassPipeline:
 
     def __init__(
         self,
@@ -152,7 +152,7 @@ class MVCFatClassPipeline:
             self.direction = 'minimize'
 
         # Tune hyperparameters
-        study = optuna.create_study(direction='maximize')
+        study = optuna.create_study(direction=self.direction)
         study.optimize(
             lambda trial: self._cb_objective(trial, train_pool),
             n_trials=n_trials
@@ -267,7 +267,10 @@ class MVCFatClassPipeline:
                 self._save_data(save_path, overwrite)
         else:
             self.load_data()
+        start_time = time()
         self._train_model(algorithm, n_trials)
+        end_time = time()
+        print(f'Training runtime: {(end_time-start_time)/60:.2f} min')
 
     def save_model(self, file_name: str, algorithm: Algorithm, file_path: Path = MODEL_DIR, overwrite: bool = False):
         if self.model is None:
@@ -287,7 +290,6 @@ class MVCFatClassPipeline:
         change_dtypes(data)
         self.collisions = data
         self._split_data()
-        
 
     def load_model(self, file_name: str, algorithm: Algorithm, file_path: Path = MODEL_DIR):
         if algorithm == Algorithm.XGBOOST:
@@ -309,4 +311,4 @@ class MVCFatClassPipeline:
 
 
 if __name__ == '__main__':
-    pipeline = MVCFatClassPipeline()
+    pipeline = CrashClassPipeline()

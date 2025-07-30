@@ -78,19 +78,33 @@ class Algorithm(Enum):
     XGBOOST = 'XGBoost'
 
 
-max_optimal_metrics = {
+MAX_OPTIMAL_METRICS = {
     'accuracy',
     'f1',
     'recall',
     'auc',
     'aucpr',
+    'prauc',
     'mcc',
     'wkappa'
 }
 
-min_optimal_metrics = {
+MIN_OPTIMAL_METRICS = {
     'error',
     'logloss',
     'brierscore',
     'focal'
+}
+
+CUSTOM_OBJECTIVES = {
+    'LDAM',
+    'Focal',
+    'EQ'
+}
+
+CUSTOM_PARAMS = {
+    'LDAM_max_m',
+    'EQ_gamma',
+    'EQ_mu',
+    'Focal_gamma'
 }
