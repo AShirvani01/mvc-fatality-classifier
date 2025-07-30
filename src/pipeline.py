@@ -230,10 +230,7 @@ class CrashClassPipeline:
             **config.model_dump(exclude='params')
         )
 
-        if self.xgb_model_config.params.eval_metric in ['LDAM', 'EQ']:
-            cv_scores = cv_results['test-loss-mean']
-        else:
-            cv_scores = cv_results[f'test-{param["eval_metric"]}-mean']
+        cv_scores = cv_results[f'test-{param["eval_metric"]}-mean']
 
         # Add optimal iterations to params
         param['n_estimators'] = cv_scores.idxmin() + 1

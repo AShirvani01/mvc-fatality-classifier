@@ -26,10 +26,13 @@ def create_objective(objective_name, y_true, params, algorithm):
 
     elif objective_name == 'Focal':
         loss = Focal_loss(y_true, params['Focal_gamma'])
+    
+    elif objective_name == 'LA':
+        loss = LA_loss(y_true, params['LA_tau'])
 
     # Wrappers
     if algorithm == 'XGBoost':
-        objective = loss_wrapper(loss)
+        objective = loss_wrapper(loss, clip=True)
 
     elif algorithm == 'CatBoost':
         objective = cat_wrapper(loss, clip=True)

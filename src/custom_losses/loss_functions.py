@@ -60,7 +60,7 @@ class LDAM_loss(loss_function):
 class Focal_loss(loss_function):
     """based on https://arxiv.org/pdf/1708.02002"""
 
-    def __init__(self, y_true, gamma=2.0, class_weight='balanced'):
+    def __init__(self, y_true: np.ndarray, gamma=2.0, class_weight='balanced'):
 
         super().__init__(y_true, class_weight)
         self.gamma = gamma
@@ -71,5 +71,35 @@ class Focal_loss(loss_function):
 
         pos_loss = torch.pow(1-p, self.gamma) * torch.log(p) * self.alpha_m
         neg_loss = torch.pow(p, self.gamma) * torch.log(1-p) * self.alpha_M
+
+        return y_true * pos_loss + (1 - y_true) * neg_loss
+
+
+###############################################################################
+
+
+class LA_loss(loss_function):
+    "based on https://arxiv.org/pdf/2007.07314"
+
+    def __init__(self, y_true: np.ndarray, tau=1.0, class_weight='balanced'):
+
+        super().__init__(y_true, class_weight)
+
+        self.tau = tau
+        minority = np.sum(y_true)
+        majority = len(y_true) - minority
+        self.pi_pos = minority / len(y_true)
+        self.pi_neg = majority / len(y_true)
+
+    def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor):
+
+        scale = self.pi_pos * y_true + self.pi_neg * (1 - y_true)
+        scale = torch.pow(scale, self.tau)
+        y_pred = y_pred + torch.log(scale)
+
+        p = torch.sigmoid(y_pred)
+
+        pos_loss = torch.log(p) * self.alpha_m
+        neg_loss = torch.log(1-p) * self.alpha_M
 
         return y_true * pos_loss + (1 - y_true) * neg_loss
