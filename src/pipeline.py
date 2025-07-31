@@ -148,7 +148,8 @@ class CrashClassPipeline:
         train_pool = cb.Pool(
             data=self.X_train,
             label=self.y_train,
-            cat_features=CAT_FEATURES
+            cat_features=CAT_FEATURES,
+            weight=np.ones(len(self.y_train))
         )
 
         if is_max_optimal(self.cb_model_config.params.eval_metric):
@@ -305,7 +306,6 @@ class CrashClassPipeline:
             self,
             algorithm: Algorithm,
             n_trials: int = 30,
-            save_data: bool = True,
             save_path: Path = DATA_DIR,
             overwrite: bool = False
     ):
@@ -314,7 +314,7 @@ class CrashClassPipeline:
             self._fetch_data()
             self._prep_data()
             self._split_data()
-            if save_data:
+            if save_path is not None:
                 self._save_data(save_path, overwrite)
         else:
             self.load_data()

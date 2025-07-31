@@ -5,8 +5,10 @@ from pydantic import (
     ConfigDict,
     Field,
     NonNegativeFloat,
-    PositiveFloat
+    PositiveFloat,
+    NonNegativeInt
 )
+import lightgbm as lgb
 
 
 def get_project_root():
@@ -38,8 +40,8 @@ class CBParams(BaseModel):
             at each split selection.
     """
     # Type alias
-    Objective: ClassVar[type] = Literal['Logloss', 'LDAM', 'Focal']
-    EvalMetric: ClassVar[type] = Literal['Logloss', 'Accuracy', 'F1', 'Recall', 'AUC', 'PRAUC', 'BrierScore', 'Focal', 'MCC', 'WKappa']
+    Objective: ClassVar[type] = Literal['Logloss', 'LDAM', 'Focal', 'LA']
+    EvalMetric: ClassVar[type] = Literal['Logloss', 'Accuracy', 'F1', 'Recall', 'AUC', 'PRAUC:use_weights=false', 'BrierScore', 'MCC', 'WKappa']
     Depth: ClassVar[type] = Annotated[int, Field(ge=1, le=16)]
     L2LeafReg: ClassVar[type] = NonNegativeFloat
     LearningRate: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
@@ -51,8 +53,8 @@ class CBParams(BaseModel):
     FocalGamma: ClassVar[type] = NonNegativeFloat
 
     # Params
-    objective: Objective = 'Logloss'
-    eval_metric: EvalMetric = 'PRAUC'
+    objective: Objective = 'LDAM'
+    eval_metric: EvalMetric = 'PRAUC:use_weights=false'
     depth: Depth | tuple[Depth, Depth] | list[Depth] = (6, 10)
     l2_leaf_reg: L2LeafReg | tuple[L2LeafReg, L2LeafReg] | list[L2LeafReg] = (0, 100)
     learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.001, 0.1)
@@ -61,9 +63,8 @@ class CBParams(BaseModel):
 
     # Custom Loss Params
     LDAM_max_m: LDAM | tuple[LDAM, LDAM] = 0.5
-    EQ_gamma: NonNegativeFloat = 0.3
-    EQ_mu: NonNegativeFloat = 0.8
     Focal_gamma: NonNegativeFloat | tuple[NonNegativeFloat, NonNegativeFloat] = (1.0, 3.0)
+    LA_tau: NonNegativeFloat = 1.0
 
     model_config = ConfigDict(extra='forbid')
 
@@ -108,7 +109,7 @@ class XGBParams(BaseModel):
             to use at each split selection.
     """
     # Type alias
-    Objective: ClassVar[type] = Literal['binary:logistic', 'LDAM', 'Focal']
+    Objective: ClassVar[type] = Literal['binary:logistic', 'LDAM', 'Focal', 'LA']
     EvalMetric: ClassVar[type] = Literal['logloss', 'error', 'auc', 'aucpr']
     MaxDepth: ClassVar[type] = Annotated[int, Field(ge=1, le=16)]
     RegLambda: ClassVar[type] = NonNegativeFloat
@@ -119,19 +120,18 @@ class XGBParams(BaseModel):
     LDAM: ClassVar[type] = Annotated[float, Field(gt=0, lt=1)]
 
     # Params/Defining defaults
-    objective: Objective = 'Focal'
+    objective: Objective = 'binary:logistic'
     eval_metric: EvalMetric = 'aucpr'
     max_depth: MaxDepth | tuple[MaxDepth, MaxDepth] | list[MaxDepth] = (6, 10)
     reg_lambda: RegLambda | tuple[RegLambda, RegLambda] | list[RegLambda] = (0., 1000.)
     learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.01, 0.1)
-    scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = (1., 15.)
+    scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = 6.
     subsample: SubSample | tuple[SubSample, SubSample] | list[SubSample] = (0.1, 1)
     
     # Custom Loss Params
     LDAM_max_m: LDAM | tuple[LDAM, LDAM] = (0.1, 0.8)
-    EQ_gamma: NonNegativeFloat = 0.3
-    EQ_mu: NonNegativeFloat = 0.8
     Focal_gamma: NonNegativeFloat | tuple[NonNegativeFloat, NonNegativeFloat] = (1.0, 3.0)
+    LA_tau: NonNegativeFloat = 1.0
 
     model_config = ConfigDict(extra='forbid')
 
@@ -152,11 +152,59 @@ class XGBModelConfig(BaseModel):
 
     params: XGBParams = XGBParams()
     early_stopping_rounds: int = 100
-    # folds: int = 5
     nfold: int = 5
     num_boost_round: int = 10_000
     seed: int = 42
     stratified: bool = True
     verbose_eval: Union[bool, int] = False
+
+    model_config = ConfigDict(extra='allow')
+
+
+class LGBParams(BaseModel):
+    """
+    LightGBM model training parameters. For details, see
+    [LightGBM's documentation](
+    https://lightgbm.readthedocs.io/en/stable/Parameters.html).
+    """
+    # Type alias
+    Objective: ClassVar[type] = Literal['binary', 'LDAM', 'Focal', 'LA']
+    Metric: ClassVar[type] = Literal['average_precision']
+    MaxDepth: ClassVar[type] = Annotated[int, Field(ge=1, le=16)]
+    RegLambda: ClassVar[type] = NonNegativeFloat
+    LearningRate: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
+    ScalePosWeight: ClassVar[type] = NonNegativeFloat
+    SubSample: ClassVar[type] = Annotated[float, Field(gt=0, le=1)]
+    
+    LDAM: ClassVar[type] = Annotated[float, Field(gt=0, lt=1)]
+
+    # Params/Defining defaults
+    objective: Objective = 'binary'
+    metric: Metric = 'average_precision'
+    max_depth: MaxDepth | tuple[MaxDepth, MaxDepth] | list[MaxDepth] = (6, 10)
+    num_leaves: NonNegativeInt = 31
+    reg_lambda: RegLambda | tuple[RegLambda, RegLambda] | list[RegLambda] = (0., 1000.)
+    learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.01, 0.1)
+    scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = 6.
+    subsample: SubSample | tuple[SubSample, SubSample] | list[SubSample] = (0.1, 1)
+    verbosity: int = -1
+    
+    # Custom Loss Params
+    LDAM_max_m: LDAM | tuple[LDAM, LDAM] = (0.1, 0.8)
+    Focal_gamma: NonNegativeFloat | tuple[NonNegativeFloat, NonNegativeFloat] = (1.0, 3.0)
+    LA_tau: NonNegativeFloat = 1.0
+
+    model_config = ConfigDict(extra='forbid')
+
+
+class LGBModelConfig(BaseModel):
+    """LightGBM Model configuration."""
+
+    params: LGBParams = LGBParams()
+    callbacks: list = [lgb.early_stopping(stopping_rounds=100)]
+    nfold: int = 5
+    num_boost_round: int = 10_000
+    seed: int = 42
+    stratified: bool = True
 
     model_config = ConfigDict(extra='allow')

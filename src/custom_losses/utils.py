@@ -13,7 +13,7 @@ def is_max_optimal(metric: str) -> bool:
 
     if metric in MAX_OPTIMAL_METRICS:
         return True
-    elif metric in MIN_OPTICAL_METRICS:
+    elif metric in MIN_OPTIMAL_METRICS:
         return False
     else:
         ValueError(f'Unknown metric: {metric}')
@@ -32,7 +32,7 @@ def create_objective(objective_name, y_true, params, algorithm):
 
     # Wrappers
     if algorithm in ['XGBoost', 'LightGBM']:
-        objective = loss_wrapper(loss)
+        objective = loss_wrapper(loss, clip=True)
 
     elif algorithm == 'CatBoost':
         objective = cat_wrapper(loss, clip=True)

@@ -33,8 +33,8 @@ class loss_wrapper:
             hessian[i] = grad(gradient[i], y_pred, create_graph=True)[0][i]
 
         if self.clip:
-            gradient = torch.clamp(gradient, -1, 1)
-            hessian = torch.clamp(hessian, -1, 1)
+            gradient = torch.clamp(gradient, -10, 10)
+            hessian = torch.clamp(hessian, -10, 10)
 
         return gradient.detach().numpy(), hessian.detach().numpy()
 

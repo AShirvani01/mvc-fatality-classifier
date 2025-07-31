@@ -85,7 +85,7 @@ MAX_OPTIMAL_METRICS = {
     'recall',
     'auc',
     'aucpr',
-    'prauc',
+    'prauc:use_weights=false',
     'mcc',
     'wkappa',
     'average_precision'
