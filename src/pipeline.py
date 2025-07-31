@@ -4,6 +4,7 @@ import pandas as pd
 from sklearn.model_selection import train_test_split
 import catboost as cb
 import xgboost as xgb
+import lightgbm as lgb
 import optuna
 from typing import Callable
 from time import time
@@ -24,7 +25,8 @@ from config import (
     DATA_DIR,
     MODEL_DIR,
     CBModelConfig,
-    XGBModelConfig
+    XGBModelConfig,
+    LGBModelConfig
 )
 from constants import FEATURES_TO_DROP, CAT_FEATURES, Algorithm
 from preprocessing import *
@@ -39,18 +41,21 @@ class CrashClassPipeline:
         data_dir: Path = DATA_DIR,
         cb_model_config: CBModelConfig = CBModelConfig(),
         xgb_model_config: XGBModelConfig = XGBModelConfig(),
+        lgb_model_config: LGBModelConfig = LGBModelConfig(),
         model_dir: Path = MODEL_DIR,
         cache_dir: Path = DATA_DIR / 'processed_data.csv'
     ):
         self.data_dir = data_dir
         self.cb_model_config = cb_model_config
         self.xgb_model_config = xgb_model_config
+        self.lgb_model_config = lgb_model_config
         self.model_dir = model_dir
         self.cache_dir = cache_dir
 
         self.algorithms: dict[Algorithm, Callable] = {
             Algorithm.CATBOOST: self._train_model_with_catboost,
-            Algorithm.XGBOOST: self._train_model_with_xgboost
+            Algorithm.XGBOOST: self._train_model_with_xgboost,
+            Algorithm.LIGHTGBM: self._train_model_with_lightgbm
         }
 
         model_dir.mkdir(exist_ok=True)
@@ -218,8 +223,6 @@ class CrashClassPipeline:
             index=self.X_train.columns
         )
 
-        best_model.save_model(self.model_dir / 'xgboost_model.json')
-
     def _xgb_objective(self, trial, dtrain):
 
         param, config = unpack_params(trial, self.xgb_model_config, 'XGBoost', self.y_train.to_numpy())
@@ -235,6 +238,57 @@ class CrashClassPipeline:
         # Add optimal iterations to params
         param['n_estimators'] = cv_scores.idxmin() + 1
         trial.set_user_attr('full_params', param)
+
+        if self.direction == 'maximize':
+            return np.max(cv_scores)
+        return np.min(cv_scores)
+
+    def _train_model_with_lightgbm(self, n_trials: int):
+
+        train_set = lgb.Dataset(
+            data=self.X_train,
+            label=self.y_train.to_numpy(),
+            categorical_feature=CAT_FEATURES,
+            free_raw_data=False
+        )
+
+        if is_max_optimal(self.lgb_model_config.params.metric):
+            self.direction = 'maximize'
+        else:
+            self.direction = 'minimize'
+
+        # Tune hyperparameters
+        study = optuna.create_study(direction=self.direction)
+        study.optimize(
+            lambda trial: self._lgb_objective(trial, train_set),
+            n_trials=n_trials
+        )
+
+        # Fit model with best hyperparameters
+        best_params = study.best_trial.user_attrs['full_params']
+        best_model = lgb.LGBMClassifier(**best_params)
+        best_model.fit(train_set.get_data(), train_set.get_label())
+        self.model = best_model
+        self.feature_importance = pd.DataFrame(
+            data=best_model.feature_importances_,
+            index=self.X_train.columns
+        )
+
+    def _lgb_objective(self, trial, train_set):
+
+        params, config = unpack_params(trial, self.lgb_model_config, 'LightGBM', self.y_train.to_numpy())
+
+        cv_results = lgb.cv(
+            params,
+            train_set,
+            **config.model_dump(exclude='params')
+        )
+
+        cv_scores = cv_results[f'valid {params["metric"]}-mean']
+
+        # Add optimal iterations to params
+        params['n_estimators'] = len(cv_scores)
+        trial.set_user_attr('full_params', params)
 
         if self.direction == 'maximize':
             return np.max(cv_scores)
@@ -281,6 +335,9 @@ class CrashClassPipeline:
             self.model.save_model(file_path / file_name)
         elif algorithm == Algorithm.CATBOOST:
             self.model.save_model(file_path / file_name, format='json')
+        elif algorithm == Algorithm.LIGHTGBM:
+            self.model.booster_.save_model(file_path / file_name)
+        print(f'{file_name} saved in {file_path}')
 
     def load_data(self):
         data = pd.read_csv(self.cache_dir)
@@ -295,6 +352,8 @@ class CrashClassPipeline:
         elif algorithm == Algorithm.CATBOOST:
             model = cb.CatBoostClassifier()
             model.load_model(file_path / file_name, format='json')
+        elif algorithm == Algorithm.LIGHTGBM:
+            model = lgb.Booster(file_path / file_name)
 
         self.model = model
 

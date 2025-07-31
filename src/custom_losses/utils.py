@@ -31,8 +31,8 @@ def create_objective(objective_name, y_true, params, algorithm):
         loss = LA_loss(y_true, params['LA_tau'])
 
     # Wrappers
-    if algorithm == 'XGBoost':
-        objective = loss_wrapper(loss, clip=True)
+    if algorithm in ['XGBoost', 'LightGBM']:
+        objective = loss_wrapper(loss)
 
     elif algorithm == 'CatBoost':
         objective = cat_wrapper(loss, clip=True)
@@ -67,6 +67,9 @@ def unpack_params(trial: optuna.Trial, config, algorithm, y_true):
 
         elif algorithm == 'CatBoost':
             params['objective'] = objective
+        
+        elif algorithm == 'LightGBM':
+            params['objective'] = objective.get_gradient
 
     # Remove unnecessary custom params
     for param in CUSTOM_PARAMS:

@@ -17,8 +17,12 @@ class loss_wrapper:
 
     def get_gradient(self, y_pred: np.ndarray, y_true: np.ndarray) -> Tuple[np.ndarray, np.ndarray]:
 
-        y_true = torch.tensor(y_true.get_label())
         y_pred = torch.tensor(y_pred, requires_grad=True)
+
+        if hasattr(y_true, 'get_label'):
+            y_true = torch.tensor(y_true.get_label())
+        else:
+            y_true = torch.tensor(y_true)
 
         loss = -self.loss_function(y_true, y_pred).sum()
 

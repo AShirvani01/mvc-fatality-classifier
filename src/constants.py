@@ -76,6 +76,7 @@ CAT_FEATURES = [
 class Algorithm(Enum):
     CATBOOST = 'CatBoost'
     XGBOOST = 'XGBoost'
+    LIGHTGBM = 'LightGBM'
 
 
 MAX_OPTIMAL_METRICS = {
@@ -86,7 +87,8 @@ MAX_OPTIMAL_METRICS = {
     'aucpr',
     'prauc',
     'mcc',
-    'wkappa'
+    'wkappa',
+    'average_precision'
 }
 
 MIN_OPTIMAL_METRICS = {
@@ -99,12 +101,11 @@ MIN_OPTIMAL_METRICS = {
 CUSTOM_OBJECTIVES = {
     'LDAM',
     'Focal',
-    'EQ'
+    'LA'
 }
 
 CUSTOM_PARAMS = {
     'LDAM_max_m',
-    'EQ_gamma',
-    'EQ_mu',
-    'Focal_gamma'
+    'Focal_gamma',
+    'LA_tau'
 }
