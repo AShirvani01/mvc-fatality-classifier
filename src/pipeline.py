@@ -185,14 +185,19 @@ class CrashClassPipeline:
         )
 
         cv_scores = cv_results[f'test-{params["eval_metric"]}-mean']
-
-        # Add optimal iterations to params
-        params['iterations'] = cv_results['iterations'].max()
-        trial.set_user_attr('full_params', params)
+        self.cv = cv_results
 
         if self.direction == 'maximize':
-            return np.max(cv_scores)
-        return np.min(cv_scores)
+            best_cv_score = np.max(cv_scores)
+            params['iterations'] = np.argmax(cv_scores) + 1  # Add optimal iter
+        else:
+            best_cv_score = np.min(cv_scores)
+            params['iterations'] = np.argmin(cv_scores) + 1  # Add optimal iter
+
+        cv_std = cv_results[f'test-{params["eval_metric"]}-std']
+        print(f'Standard Error: {cv_std[params["iterations"]-1] / np.sqrt(config.nfold):.4f}')
+        trial.set_user_attr('full_params', params)
+        return best_cv_score
 
     def _train_model_with_xgboost(self, n_trials: int):
 
@@ -235,14 +240,19 @@ class CrashClassPipeline:
         )
 
         cv_scores = cv_results[f'test-{param["eval_metric"]}-mean']
+        self.cv = cv_results
 
         # Add optimal iterations to params
-        param['n_estimators'] = cv_scores.idxmin() + 1
-        trial.set_user_attr('full_params', param)
+        param['n_estimators'] = len(cv_scores)
 
         if self.direction == 'maximize':
-            return np.max(cv_scores)
-        return np.min(cv_scores)
+            best_cv_score = np.max(cv_scores)
+        else:
+            best_cv_score = np.min(cv_scores)
+        cv_std = cv_results[f'test-{param["eval_metric"]}-std']
+        print(f'Standard Error: {cv_std[param["n_estimators"]-1] / np.sqrt(config.nfold):.4f}')
+        trial.set_user_attr('full_params', param)
+        return best_cv_score
 
     def _train_model_with_lightgbm(self, n_trials: int):
 
@@ -286,6 +296,7 @@ class CrashClassPipeline:
         )
 
         cv_scores = cv_results[f'valid {params["metric"]}-mean']
+        self.cv = cv_results
 
         # Add optimal iterations to params
         params['n_estimators'] = len(cv_scores)
