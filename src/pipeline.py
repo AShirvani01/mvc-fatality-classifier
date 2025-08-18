@@ -220,13 +220,13 @@ class CrashClassPipeline:
             n_trials=n_trials
         )
 
-        # Fit model with best hyperparameters
-        best_params = study.best_trial.user_attrs['full_params']
-        best_model = xgb.XGBClassifier(**best_params)
-        best_model.fit(dtrain.get_data(), dtrain.get_label())
+        # Fit model with best settings
+        best_trial_attr = study.best_trial.user_attrs
+        self.best_trial_attr = best_trial_attr
+        best_model = xgb.train(**best_trial_attr, dtrain=dtrain)
         self.model = best_model
         self.feature_importance = pd.DataFrame(
-            data=best_model.feature_importances_,
+            data=best_model.get_score(importance_type='gain'),
             index=self.X_train.columns
         )
 
@@ -243,16 +243,20 @@ class CrashClassPipeline:
         cv_scores = cv_results[f'test-{param["eval_metric"]}-mean']
         self.cv = cv_results
 
-        # Add optimal iterations to params
-        param['n_estimators'] = len(cv_scores)
+        # Add attribute with best settings for final model training
+        trial.set_user_attr('num_boost_round', len(cv_scores))
+        trial.set_user_attr('params', param)
+        if 'objective' not in param:
+            trial.set_user_attr('obj', config.obj)
+
+        cv_std = cv_results[f'test-{param["eval_metric"]}-std']
+        print(f'Standard Error: {cv_std[len(cv_scores)-1] / np.sqrt(config.nfold):.4f}')
 
         if self.direction == 'maximize':
             best_cv_score = np.max(cv_scores)
         else:
             best_cv_score = np.min(cv_scores)
-        cv_std = cv_results[f'test-{param["eval_metric"]}-std']
-        print(f'Standard Error: {cv_std[param["n_estimators"]-1] / np.sqrt(config.nfold):.4f}')
-        trial.set_user_attr('full_params', param)
+
         return best_cv_score
 
     def _train_model_with_lightgbm(self, n_trials: int):
@@ -281,7 +285,7 @@ class CrashClassPipeline:
         best_model = lgb.train(best_params, train_set)
         self.model = best_model
         self.feature_importance = pd.DataFrame(
-            data=best_model.feature_importances(),
+            data=best_model.feature_importance(),
             index=self.X_train.columns
         )
 
@@ -342,12 +346,10 @@ class CrashClassPipeline:
             print('Model with file name already exists. Set overwrite to True or set new file name.')
             return
 
-        if algorithm == Algorithm.XGBOOST:
+        if algorithm in [Algorithm.XGBOOST, Algorithm.LIGHTGBM]:
             self.model.save_model(file_path / file_name)
         elif algorithm == Algorithm.CATBOOST:
             self.model.save_model(file_path / file_name, format='json')
-        elif algorithm == Algorithm.LIGHTGBM:
-            self.model.booster_.save_model(file_path / file_name)
         print(f'{file_name} saved in {file_path}')
 
     def load_data(self):
@@ -372,11 +374,16 @@ class CrashClassPipeline:
         if isinstance(self.model, lgb.Booster):
             y_train_proba = expit(self.model.predict(self.X_train))
             y_test_proba = expit(self.model.predict(self.X_test))
+        elif isinstance(self.model, xgb.Booster):
+            dtrain = xgb.DMatrix(self.X_train, enable_categorical=True)
+            dtest = xgb.DMatrix(self.X_test, enable_categorical=True)
+            y_train_proba = self.model.predict(dtrain)
+            y_test_proba = self.model.predict(dtest)
         else:
             y_train_proba = self.model.predict_proba(self.X_train)[:, 1]
             y_test_proba = self.model.predict_proba(self.X_test)[:, 1]
 
-        self.threshold = get_optimal_threshold(self.y_train.values, y_train_proba)
+        self.threshold = get_optimal_threshold(self.y_train.to_numpy(), y_train_proba)
         metrics, self.confusion_matrix = get_metrics(self.y_test.values, y_test_proba, self.threshold)
         self.metrics = pd.DataFrame(metrics, index=[0])
 
