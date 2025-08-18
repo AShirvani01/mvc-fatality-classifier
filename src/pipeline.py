@@ -166,7 +166,7 @@ class CrashClassPipeline:
         )
 
         # Fit model with best hyperparameters
-        best_params = study.best_trial.user_attrs['full_params']
+        best_params = study.best_trial.user_attrs['params']
         best_model = cb.CatBoostClassifier(**best_params, verbose=False, class_names=[0, 1])
         best_model.fit(train_pool)
         self.model = best_model
@@ -197,7 +197,7 @@ class CrashClassPipeline:
 
         cv_std = cv_results[f'test-{params["eval_metric"]}-std']
         print(f'Standard Error: {cv_std[params["iterations"]-1] / np.sqrt(config.nfold):.4f}')
-        trial.set_user_attr('full_params', params)
+        trial.set_user_attr('params', params)
         return best_cv_score
 
     def _train_model_with_xgboost(self, n_trials: int):
@@ -336,7 +336,7 @@ class CrashClassPipeline:
         end_time = time()
         print(f'Training runtime: {(end_time-start_time)/60:.2f} min')
 
-    def save_model(self, file_name: str, algorithm: Algorithm, file_path: Path = MODEL_DIR, overwrite: bool = False):
+    def save_model(self, file_name: str, file_path: Path = MODEL_DIR, overwrite: bool = False):
         if self.model is None:
             print('No model to save.')
             return
@@ -344,9 +344,9 @@ class CrashClassPipeline:
             print('Model with file name already exists. Set overwrite to True or set new file name.')
             return
 
-        if algorithm in [Algorithm.XGBOOST, Algorithm.LIGHTGBM]:
+        if isinstance(self.model, (xgb.Booster, lgb.Booster)):
             self.model.save_model(file_path / file_name)
-        elif algorithm == Algorithm.CATBOOST:
+        else:
             self.model.save_model(file_path / file_name, format='json')
         print(f'{file_name} saved in {file_path}')
 
@@ -358,8 +358,7 @@ class CrashClassPipeline:
 
     def load_model(self, file_name: str, algorithm: Algorithm, file_path: Path = MODEL_DIR):
         if algorithm == Algorithm.XGBOOST:
-            model = xgb.XGBClassifier()
-            model.load_model(file_path / file_name)
+            model = xgb.Booster(file_path / file_name)
         elif algorithm == Algorithm.CATBOOST:
             model = cb.CatBoostClassifier()
             model.load_model(file_path / file_name, format='json')
