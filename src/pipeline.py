@@ -253,11 +253,8 @@ class CrashClassPipeline:
         print(f'Standard Error: {cv_std[len(cv_scores)-1] / np.sqrt(config.nfold):.4f}')
 
         if self.direction == 'maximize':
-            best_cv_score = np.max(cv_scores)
-        else:
-            best_cv_score = np.min(cv_scores)
-
-        return best_cv_score
+            return np.max(cv_scores)
+        return np.min(cv_scores)
 
     def _train_model_with_lightgbm(self, n_trials: int):
 
@@ -280,9 +277,10 @@ class CrashClassPipeline:
             n_trials=n_trials
         )
 
-        # Fit model with best hyperparameters
-        best_params = study.best_trial.user_attrs['full_params']
-        best_model = lgb.train(best_params, train_set)
+        # Fit model with best settings
+        best_trial_attr = study.best_trial.user_attrs
+        self.best_trial_attr = best_trial_attr
+        best_model = lgb.train(**best_trial_attr, train_set=train_set)
         self.model = best_model
         self.feature_importance = pd.DataFrame(
             data=best_model.feature_importance(),
@@ -302,9 +300,9 @@ class CrashClassPipeline:
         cv_scores = cv_results[f'valid {params["metric"]}-mean']
         self.cv = cv_results
 
-        # Add optimal iterations to params
-        params['n_estimators'] = len(cv_scores)
-        trial.set_user_attr('full_params', params)
+        # Add attribute with best settings for final model training
+        trial.set_user_attr('num_boost_round', len(cv_scores))
+        trial.set_user_attr('params', params)
 
         if self.direction == 'maximize':
             return np.max(cv_scores)
