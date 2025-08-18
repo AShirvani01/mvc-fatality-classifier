@@ -56,13 +56,13 @@ class CBParams(BaseModel):
     objective: Objective = 'LDAM'
     eval_metric: EvalMetric = 'PRAUC:use_weights=false'
     depth: Depth | tuple[Depth, Depth] | list[Depth] = (6, 10)
-    l2_leaf_reg: L2LeafReg | tuple[L2LeafReg, L2LeafReg] | list[L2LeafReg] = (0, 100)
+    l2_leaf_reg: L2LeafReg | tuple[L2LeafReg, L2LeafReg] | list[L2LeafReg] = (0., 1000.)
     learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.001, 0.1)
-    # rsm: RSM | tuple[RSM, RSM] | list[RSM] = 0.8
+    # rsm: RSM | tuple[RSM, RSM] | list[RSM] = (0.1, 1.)
     scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = 6.
 
     # Custom Loss Params
-    LDAM_max_m: LDAM | tuple[LDAM, LDAM] = 0.5
+    LDAM_max_m: LDAM | tuple[LDAM, LDAM] = (0.1, 0.8)
     Focal_gamma: NonNegativeFloat | tuple[NonNegativeFloat, NonNegativeFloat] = (1.0, 3.0)
     LA_tau: NonNegativeFloat = 1.0
 
@@ -85,7 +85,7 @@ class CBModelConfig(BaseModel):
 
     params: CBParams = CBParams()
     early_stopping_rounds: int = 100
-    fold_count: int = 5
+    nfold: int = 5
     num_boost_round: int = 10_000
     seed: int = 42
     stratified: bool = True
@@ -120,13 +120,13 @@ class XGBParams(BaseModel):
     LDAM: ClassVar[type] = Annotated[float, Field(gt=0, lt=1)]
 
     # Params/Defining defaults
-    objective: Objective = 'binary:logistic'
+    objective: Objective = 'LDAM'
     eval_metric: EvalMetric = 'aucpr'
     max_depth: MaxDepth | tuple[MaxDepth, MaxDepth] | list[MaxDepth] = (6, 10)
     reg_lambda: RegLambda | tuple[RegLambda, RegLambda] | list[RegLambda] = (0., 1000.)
-    learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.01, 0.1)
+    learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.001, 0.1)
     scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = 6.
-    subsample: SubSample | tuple[SubSample, SubSample] | list[SubSample] = (0.1, 1)
+    subsample: SubSample | tuple[SubSample, SubSample] | list[SubSample] = (0.1, 1.)
     
     # Custom Loss Params
     LDAM_max_m: LDAM | tuple[LDAM, LDAM] = (0.1, 0.8)
@@ -179,16 +179,16 @@ class LGBParams(BaseModel):
     LDAM: ClassVar[type] = Annotated[float, Field(gt=0, lt=1)]
 
     # Params/Defining defaults
-    objective: Objective = 'binary'
+    objective: Objective = 'LDAM'
     metric: Metric = 'average_precision'
     max_depth: MaxDepth | tuple[MaxDepth, MaxDepth] | list[MaxDepth] = (6, 10)
     num_leaves: NonNegativeInt = 31
     reg_lambda: RegLambda | tuple[RegLambda, RegLambda] | list[RegLambda] = (0., 1000.)
-    learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.01, 0.1)
+    learning_rate: LearningRate | tuple[LearningRate, LearningRate] | list[LearningRate] = (0.001, 0.1)
     scale_pos_weight: ScalePosWeight | tuple[ScalePosWeight, ScalePosWeight] | list[ScalePosWeight] = 6.
-    subsample: SubSample | tuple[SubSample, SubSample] | list[SubSample] = (0.1, 1)
+    subsample: SubSample | tuple[SubSample, SubSample] | list[SubSample] = (0.1, 1.)
     verbosity: int = -1
-    
+
     # Custom Loss Params
     LDAM_max_m: LDAM | tuple[LDAM, LDAM] = (0.1, 0.8)
     Focal_gamma: NonNegativeFloat | tuple[NonNegativeFloat, NonNegativeFloat] = (1.0, 3.0)

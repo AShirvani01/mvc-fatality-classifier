@@ -2,6 +2,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 from sklearn.model_selection import train_test_split
+from scipy.special import expit
 import catboost as cb
 import xgboost as xgb
 import lightgbm as lgb
@@ -277,11 +278,10 @@ class CrashClassPipeline:
 
         # Fit model with best hyperparameters
         best_params = study.best_trial.user_attrs['full_params']
-        best_model = lgb.LGBMClassifier(**best_params)
-        best_model.fit(train_set.get_data(), train_set.get_label())
+        best_model = lgb.train(best_params, train_set)
         self.model = best_model
         self.feature_importance = pd.DataFrame(
-            data=best_model.feature_importances_,
+            data=best_model.feature_importances(),
             index=self.X_train.columns
         )
 
@@ -369,8 +369,12 @@ class CrashClassPipeline:
         self.model = model
 
     def predict(self):
-        y_train_proba = self.model.predict_proba(self.X_train)[:, 1]
-        y_test_proba = self.model.predict_proba(self.X_test)[:, 1]
+        if isinstance(self.model, lgb.Booster):
+            y_train_proba = expit(self.model.predict(self.X_train))
+            y_test_proba = expit(self.model.predict(self.X_test))
+        else:
+            y_train_proba = self.model.predict_proba(self.X_train)[:, 1]
+            y_test_proba = self.model.predict_proba(self.X_test)[:, 1]
 
         self.threshold = get_optimal_threshold(self.y_train.values, y_train_proba)
         metrics, self.confusion_matrix = get_metrics(self.y_test.values, y_test_proba, self.threshold)
