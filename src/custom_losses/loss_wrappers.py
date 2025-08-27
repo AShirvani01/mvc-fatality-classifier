@@ -69,8 +69,8 @@ class cat_wrapper:
             hessian[i] = grad(gradient[i], y_pred, create_graph=True)[0][i]  # Shape(y_pred, )
 
         if self.clip:
-            gradient = torch.clamp(gradient, -1, 1)
-            hessian = torch.clamp(hessian, -1, 1)
+            gradient = torch.clamp(gradient, -10, 10)
+            hessian = torch.clamp(hessian, -10, 10)
 
         gradient = gradient.detach().numpy()
         hessian = hessian.detach().numpy()

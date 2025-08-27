@@ -88,16 +88,14 @@ class LA_loss(loss_function):
         self.tau = tau
         minority = np.sum(y_true)
         majority = len(y_true) - minority
-        self.pi_pos = minority / len(y_true)
-        self.pi_neg = majority / len(y_true)
+        self.pi_1 = minority / len(y_true)
+        self.pi_0 = majority / len(y_true)
 
     def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor):
 
-        scale = self.pi_pos * y_true + self.pi_neg * (1 - y_true)
-        scale = torch.pow(scale, self.tau)
-        y_pred = y_pred + torch.log(scale)
+        offset = self.tau * torch.log(self.pi_1 / self.pi_0)
 
-        p = torch.sigmoid(y_pred)
+        p = torch.sigmoid(y_pred + offset)
 
         pos_loss = torch.log(p) * self.alpha_m
         neg_loss = torch.log(1-p) * self.alpha_M
