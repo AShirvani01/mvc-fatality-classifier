@@ -22,11 +22,11 @@ def is_max_optimal(metric: str) -> bool:
 def create_objective(objective_name, y_true, params, algorithm):
 
     if objective_name == 'LDAM':
-        loss = LDAM_loss(y_true, params['LDAM_max_m'])
+        loss = LDAM_loss(y_true, params['LDAM_c'])
 
     elif objective_name == 'Focal':
         loss = Focal_loss(y_true, params['Focal_gamma'])
-    
+
     elif objective_name == 'LA':
         loss = LA_loss(y_true, params['LA_tau'])
 
@@ -35,7 +35,7 @@ def create_objective(objective_name, y_true, params, algorithm):
         objective = loss_wrapper(loss, clip=True)
 
     elif algorithm == 'CatBoost':
-        objective = cat_wrapper(loss, clip=True)
+        objective = cat_wrapper(loss)
 
     return objective
 
@@ -67,7 +67,7 @@ def unpack_params(trial: optuna.Trial, config, algorithm, y_true):
 
         elif algorithm == 'CatBoost':
             params['objective'] = objective
-        
+
         elif algorithm == 'LightGBM':
             params['objective'] = objective.get_gradient
 

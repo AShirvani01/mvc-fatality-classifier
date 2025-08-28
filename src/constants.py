@@ -105,7 +105,7 @@ CUSTOM_OBJECTIVES = {
 }
 
 CUSTOM_PARAMS = {
-    'LDAM_max_m',
+    'LDAM_c',
     'Focal_gamma',
     'LA_tau'
 }

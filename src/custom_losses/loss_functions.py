@@ -25,31 +25,24 @@ class loss_function:
 class LDAM_loss(loss_function):
     """based on https://arxiv.org/pdf/1906.07413"""
 
-    def __init__(self, y_true: np.ndarray, max_m=0.5, class_weight='balanced', s=30):
+    def __init__(self, y_true: np.ndarray, c=1.0, class_weight='balanced'):
 
         super().__init__(y_true, class_weight)
 
-        minority = np.sum(y_true)
-        majority = len(y_true) - minority
-        cls_num_list = torch.tensor([majority, minority])
-        m_list = torch.pow(cls_num_list, -1/4)
-        m_list *= max_m / torch.max(m_list)
-        self.m_list = m_list
-
-        assert s > 0
-        self.s = s
+        assert c > 0
+        n_1 = np.sum(y_true)
+        n_0 = len(y_true) - n_1
+        n_list = torch.tensor([n_0, n_1])
+        n_list = c * torch.pow(n_list, -1/4)
+        self.n_list = n_list
 
     def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor):
 
-        index = y_true > 0
-        batch_m = torch.where(index, self.m_list[1], self.m_list[0])
-        y_m = y_pred - batch_m
+        p_1 = torch.sigmoid(y_pred - self.n_list[1])
+        p_0 = torch.sigmoid(y_pred + self.n_list[0])
 
-        output = torch.where(index, y_m, y_pred)
-
-        p = torch.sigmoid(self.s*output)
-        pos_loss = torch.log(p) * self.alpha_m
-        neg_loss = torch.log(1-p) * self.alpha_M
+        pos_loss = torch.log(p_1) * self.alpha_m
+        neg_loss = torch.log(1-p_0) * self.alpha_M
 
         return y_true * pos_loss + (1 - y_true) * neg_loss
 
@@ -85,17 +78,17 @@ class LA_loss(loss_function):
 
         super().__init__(y_true, class_weight)
 
-        self.tau = tau
-        minority = np.sum(y_true)
-        majority = len(y_true) - minority
-        self.pi_1 = minority / len(y_true)
-        self.pi_0 = majority / len(y_true)
+        n = len(y_true)
+        n_1 = np.sum(y_true)
+        n_0 = n - n_1
+        pi_1 = n_1 / n
+        pi_0 = n_0 / n
+
+        self.offset = tau * np.log(pi_1 / pi_0)
 
     def __call__(self, y_true: torch.Tensor, y_pred: torch.Tensor):
 
-        offset = self.tau * torch.log(self.pi_1 / self.pi_0)
-
-        p = torch.sigmoid(y_pred + offset)
+        p = torch.sigmoid(y_pred + self.offset)
 
         pos_loss = torch.log(p) * self.alpha_m
         neg_loss = torch.log(1-p) * self.alpha_M
